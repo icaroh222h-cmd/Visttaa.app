@@ -4,7 +4,7 @@ import { useAppContext } from '../context/AppContext';
 import { FeedbackAlert, LogoVistta } from '../components/SharedUI';
 
 export function SetupOticaScreen() {
-  const { configurarOtica } = useAppContext();
+  const { configurarOtica, databaseError } = useAppContext();
   const [nome, setNome] = useState('');
   const [erro, setErro] = useState('');
   const [salvando, setSalvando] = useState(false);
@@ -55,6 +55,7 @@ export function SetupOticaScreen() {
               <form onSubmit={submit} className="space-y-5">
                 <div><label htmlFor="nome-otica" className="mb-2 block text-[11px] font-bold uppercase tracking-wider text-[var(--vistta-secondary)]">Nome comercial</label><input id="nome-otica" autoFocus required value={nome} onChange={event => { setNome(event.target.value); if (erro) setErro(''); }} placeholder="Ex.: Ótica Vistta Centro" className="w-full rounded-2xl border border-[var(--vistta-border)] bg-[var(--vistta-muted-surface)] px-4 py-4 text-[15px] text-[var(--vistta-ink)] outline-none transition-all placeholder:text-[var(--vistta-secondary)] focus:border-[var(--vistta-violet)] focus:ring-4 focus:ring-[rgba(109,74,255,.12)] dark:text-white" /></div>
                 {erro && <FeedbackAlert>{erro}</FeedbackAlert>}
+                {databaseError && <FeedbackAlert>{databaseError}</FeedbackAlert>}
                 <button type="submit" disabled={salvando} className="flex w-full items-center justify-between rounded-2xl bg-[var(--vistta-plum)] px-5 py-4 text-[15px] font-bold text-white shadow-[0_12px_24px_rgba(48,32,77,.18)] transition-all hover:bg-[var(--vistta-violet)] disabled:cursor-not-allowed disabled:opacity-60"><span>{salvando ? 'Salvando ambiente...' : 'Criar ambiente VISTTA'}</span>{!salvando && <ArrowRight size={19} />}</button>
               </form>
               <div className="mt-6 flex items-start gap-3 border-t border-[var(--vistta-border)] pt-5 text-xs leading-5 text-[var(--vistta-secondary)]"><Check size={16} className="mt-0.5 shrink-0 text-emerald-500" /><span>Você poderá alterar os dados e convidar sua equipe depois.</span></div>

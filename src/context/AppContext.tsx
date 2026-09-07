@@ -130,8 +130,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   const ensureUserProfile = async (authUser: User) => {
     const userPath = `users/${authUser.uid}`;
+    console.info('[USER] Verificando /users/{uid}', { path: userPath, uid: authUser.uid, email: authUser.email || null });
     const userSnapshot = await get(ref(db, userPath));
     const userData = userSnapshot.val() || {};
+    console.info(`[USER] Usuário ${userSnapshot.exists() ? 'encontrado' : 'não encontrado'}`, { path: userPath });
     const profile = {
       email: authUser.email || userData.email || '',
       nome: userData.nome || authUser.displayName || '',
@@ -143,6 +145,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
     if (!userSnapshot.exists()) {
       await set(ref(db, userPath), profile);
+      console.info('[USER] Perfil criado', { uid: authUser.uid, role: profile.role, status: profile.status, empresaId: profile.empresaId || null });
       return;
     }
 
@@ -156,6 +159,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
     if (needsUpdate) {
       await update(ref(db, userPath), profile);
+      console.info('[USER] Perfil atualizado', { uid: authUser.uid, role: profile.role, status: profile.status, empresaId: profile.empresaId || null });
     }
   };
 
@@ -169,6 +173,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
     const userSnapshot = await get(ref(db, `users/${user.uid}`));
     const profile = userSnapshot.val() || {};
+    console.info('[USER] Role', { uid: user.uid, role: profile.role || null, status: profile.status || null });
+    console.info('[USER] Empresa', { uid: user.uid, empresaId: profile.empresaId || null });
     if (!profile.role || profile.role !== 'admin') {
       throw new Error('Perfil do usuário não está em estado de administrador para criar uma empresa.');
     }
@@ -190,9 +196,20 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       throw diagnostic;
     };
     const companyPath = `empresas/${empresaRef.key}/info`;
+    const companyRuleChecks = {
+      authenticated: Boolean(auth.currentUser?.uid),
+      newCompany: true,
+      criadoPorMatchesAuth: empresaInfo.criadoPor === user.uid,
+      profileRoleIsAdmin: profile.role === 'admin',
+      profileHasNoEmpresa: !profile.empresaId
+    };
+    console.info('[EMPRESA] Verificando empresa', { path: companyPath, uid: user.uid, role: profile.role, empresaId: profile.empresaId || null, ruleChecks: companyRuleChecks });
     try {
+      console.info('[EMPRESA] Criando empresa', { path: companyPath, criadoPor: user.uid });
       await update(ref(db, companyPath), empresaInfo);
+      console.info('[EMPRESA] Criada', { path: companyPath });
     } catch (error: any) {
+      console.error('[EMPRESA] Erro ao criar empresa', { path: companyPath, code: error?.code, message: error?.message, uid: user.uid, role: profile.role, empresaId: profile.empresaId || null });
       reportDatabaseFailure('criar empresa', companyPath, error);
     }
     const userPath = `users/${user.uid}`;
@@ -200,6 +217,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       await update(ref(db, userPath), { empresaId: empresaRef.key, role: 'admin', status: 'active', email: user.email || '', updatedAt: new Date().toISOString() });
       void trackEvent('empresa_criada');
     } catch (error: any) {
+      console.error('[USER] Erro ao vincular empresa', { path: userPath, code: error?.code, message: error?.message, uid: user.uid });
       reportDatabaseFailure('vincular perfil', userPath, error);
     }
   };
@@ -262,6 +280,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       const sequence = ++authSequence;
       clearProfileListener();
       if (u) {
+        console.info('[AUTH] Firebase Auth retornou usuário', { uid: u.uid, email: u.email || null });
         setDatabaseError(null);
         profileTimeout = setTimeout(() => {
           if (sequence !== authSequence) return;
@@ -300,6 +319,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         const profileRef = ref(db, `users/${u.uid}`);
         try {
           const profileSnapshot = await get(profileRef);
+          console.info(`[USER] Usuário ${profileSnapshot.exists() ? 'encontrado' : 'não encontrado'}`, { path: `users/${u.uid}`, uid: u.uid });
           if (!profileSnapshot.exists() && perfilEmProvisionamento.current !== u.uid) {
             perfilEmProvisionamento.current = u.uid;
             await update(profileRef, {
@@ -309,6 +329,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
               nome: u.displayName || '',
               createdAt: new Date().toISOString()
             });
+            console.info('[USER] Perfil inicial criado', { uid: u.uid, role: 'admin', status: 'active', empresaId: null });
           }
         } catch (error: any) {
           console.error('[Auth] Falha ao criar/recuperar perfil:', {
@@ -319,9 +340,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             code: error?.code,
             message: error?.message
           });
+          console.error('[USER] Erro ao ler/criar perfil', { path: `users/${u.uid}`, code: error?.code, message: error?.message, uid: u.uid, email: u.email || null });
           setDatabaseError(`Não foi possível criar o perfil do usuário. Código: ${error?.code || 'unknown'}. ${error?.message || ''}`);
-            clearProfileTimeout();
-          setUser(null);
+          clearProfileTimeout();
+          setUser(u);
           setEmpresaId(null);
           setUserRole(null);
           setLoadingAuth(false);
@@ -329,33 +351,39 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         }
         unsubscribeProfile = onValue(
           profileRef,
-          (snap) => {
-              if (sequence !== authSequence) return;
-            if (!snap.exists()) return;
-            const data = snap.val();
+            async (snap) => {
+              if (sequence !== authSequence || !snap.exists()) return;
+              const data = snap.val();
+              console.info('[USER] Role', { uid: u.uid, role: data?.role || null, status: data?.status || null });
+              console.info('[USER] Empresa', { uid: u.uid, empresaId: data?.empresaId || null });
             setEmpresaId(data?.empresaId || null);
             setUserRole(['admin', 'manager', 'user'].includes(data?.role) ? data.role : null);
             if (data?.empresaId) {
-              get(ref(db, `empresas/${data.empresaId}/info`)).then((snap) => {
-                setDadosEmpresa(snap.exists() ? snap.val() : null);
-              }).catch((error) => {
-                console.error('Não foi possível carregar os dados da empresa:', error);
-                setDatabaseError('Não foi possível carregar os dados da empresa.');
-              });
+                try {
+                  const companySnapshot = await get(ref(db, `empresas/${data.empresaId}/info`));
+                  console.info('[EMPRESA] Ambiente da empresa carregado', { path: `empresas/${data.empresaId}/info`, exists: companySnapshot.exists(), empresaId: data.empresaId });
+                  setDadosEmpresa(companySnapshot.exists() ? companySnapshot.val() : null);
+                } catch (error: any) {
+                  console.error('[EMPRESA] Erro ao carregar empresa', { path: `empresas/${data.empresaId}/info`, code: error?.code, message: error?.message, empresaId: data.empresaId, uid: u.uid });
+                  setDatabaseError(`Não foi possível carregar a empresa. Código: ${error?.code || 'unknown'}. ${error?.message || ''}`);
+                }
             } else {
               setDadosEmpresa(null);
             }
             setUser(u);
               clearProfileTimeout();
             setLoadingAuth(false);
+              console.info('[ENV] Preparando ambiente', { uid: u.uid, empresaId: data?.empresaId || null });
+              console.info('[ENV] Ambiente carregado', { uid: u.uid, empresaId: data?.empresaId || null });
+              console.info('[ROTA] Redirecionando', { destination: data?.empresaId ? 'dashboard' : 'setup' });
           },
-          (error) => {
-            console.error('Não foi possível carregar o perfil do usuário:', error);
+          (error: any) => {
+            console.error('[USER] Erro no listener do perfil', { path: `users/${u.uid}`, code: error?.code, message: error?.message, uid: u.uid });
             setEmpresaId(null);
             setUserRole(null);
             setDadosEmpresa(null);
             setDatabaseError('Não foi possível carregar seu perfil no Firebase. Verifique as regras do Realtime Database.');
-            setUser(null);
+            setUser(u);
             setLoadingAuth(false);
             clearProfileListener();
           }

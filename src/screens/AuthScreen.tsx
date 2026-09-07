@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithRedirect, getRedirectResult, GoogleAuthProvider, sendPasswordResetEmail, verifyPasswordResetCode, confirmPasswordReset } from 'firebase/auth';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, sendPasswordResetEmail, verifyPasswordResetCode, confirmPasswordReset } from 'firebase/auth';
 import { ref, update } from 'firebase/database';
 import { auth, db } from '../config/firebase';
 import { trackEvent } from '../services/telemetry';
@@ -19,24 +19,6 @@ export function AuthScreen() {
   const [resetFeedback, setResetFeedback] = useState('');
   const [accountExists, setAccountExists] = useState(false);
   const [resetCode, setResetCode] = useState('');
-
-  useEffect(() => {
-    let ativo = true;
-    const processarRedirect = async () => {
-      try {
-        const result = await getRedirectResult(auth);
-        if (!result || !ativo) return;
-        setIsLoggingIn(true);
-        void trackEvent('login_google');
-      } catch (error: any) {
-        if (ativo) setAuthError(getGoogleErrorMessage(error));
-      } finally {
-        if (ativo) setIsLoggingIn(false);
-      }
-    };
-    void processarRedirect();
-    return () => { ativo = false; };
-  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -105,11 +87,17 @@ export function AuthScreen() {
   const handleGoogleLogin = async () => {
     setAuthError('');
     setIsLoggingIn(true);
+    console.info('[AUTH] Popup iniciado');
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
     try {
-      await signInWithRedirect(auth, provider);
+      const result = await signInWithPopup(auth, provider);
+      console.info('[AUTH] Google autenticado', { provider: result.providerId });
+      console.info('[AUTH] UID recebido', { uid: result.user.uid });
+      console.info('[AUTH] Email recebido', { email: result.user.email || null });
+      void trackEvent('login_google');
     } catch (error: any) {
+      console.error('[AUTH] Erro no popup Google', { code: error?.code, message: error?.message });
       setAuthError(getGoogleErrorMessage(error));
       setIsLoggingIn(false);
     }
