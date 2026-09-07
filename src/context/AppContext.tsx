@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useRef, ReactNode } from 'react';
 import { getApps, initializeApp } from 'firebase/app';
-import { ref, push, update, remove, onValue, query, limitToLast, orderByChild, startAt, get, getDatabase, runTransaction } from 'firebase/database';
+import { ref, push, update, remove, onValue, query, limitToLast, orderByChild, startAt, get, getDatabase, runTransaction, set } from 'firebase/database';
 import { createUserWithEmailAndPassword, getAuth, onAuthStateChanged, sendPasswordResetEmail, signOut, User } from 'firebase/auth';
 import { db, auth, firebaseConfig } from '../config/firebase';
 import { Produto, Cliente, Venda, Caixa, CarrinhoItem, Orcamento, OrdemServico } from '../types';
@@ -128,14 +128,57 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     return empresaId;
   };
 
+  const ensureUserProfile = async (authUser: User) => {
+    const userPath = `users/${authUser.uid}`;
+    const userSnapshot = await get(ref(db, userPath));
+    const userData = userSnapshot.val() || {};
+    const profile = {
+      email: authUser.email || userData.email || '',
+      nome: userData.nome || authUser.displayName || '',
+      role: userData.role || 'admin',
+      status: userData.status || 'active',
+      ...(userData.empresaId ? { empresaId: userData.empresaId } : {}),
+      updatedAt: new Date().toISOString()
+    };
+
+    if (!userSnapshot.exists()) {
+      await set(ref(db, userPath), profile);
+      return;
+    }
+
+    const needsUpdate = 
+      !userData.role ||
+      userData.role === 'developer' ||
+      userData.role === 'admin' && userData.empresaId !== undefined && userData.empresaId !== null ||
+      !userData.status ||
+      userData.email !== (authUser.email || '') ||
+      userData.nome !== (authUser.displayName || userData.nome || '');
+
+    if (needsUpdate) {
+      await update(ref(db, userPath), profile);
+    }
+  };
+
   const configurarOtica = async (nome: string) => {
     const nomeNormalizado = nome.trim();
     if (!user) throw new Error('Usuário não autenticado.');
     if (!nomeNormalizado) throw new Error('Informe o nome da ótica.');
     if (empresaId) return;
+
+    await ensureUserProfile(user);
+
+    const userSnapshot = await get(ref(db, `users/${user.uid}`));
+    const profile = userSnapshot.val() || {};
+    if (!profile.role || profile.role !== 'admin') {
+      throw new Error('Perfil do usuário não está em estado de administrador para criar uma empresa.');
+    }
+    if (profile.empresaId) {
+      throw new Error('Este usuário já está vinculado a uma empresa.');
+    }
+
     const empresaRef = push(ref(db, 'empresas'));
     if (!empresaRef.key) throw new Error('Não foi possível criar a empresa.');
-    const empresaInfo = { nome: nomeNormalizado, criadoEm: new Date().toISOString(), criadoPor: user.uid };
+    const empresaInfo = { nome: nomeNormalizado, criadoEm: new Date().toISOString(), criadoPor: user.uid, status: 'active' };
     const reportDatabaseFailure = (operation: string, path: string, error: any): never => {
       const code = error?.code || 'unknown';
       const message = error?.message || String(error);
@@ -154,7 +197,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }
     const userPath = `users/${user.uid}`;
     try {
-      await update(ref(db, userPath), { empresaId: empresaRef.key, role: 'admin', status: 'active', email: user.email || '' });
+      await update(ref(db, userPath), { empresaId: empresaRef.key, role: 'admin', status: 'active', email: user.email || '', updatedAt: new Date().toISOString() });
       void trackEvent('empresa_criada');
     } catch (error: any) {
       reportDatabaseFailure('vincular perfil', userPath, error);
@@ -202,18 +245,35 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     let unsubscribeProfile: (() => void) | undefined;
     let profileTimeout: ReturnType<typeof setTimeout> | undefined;
+    let authSequence = 0;
 
-    const clearProfileListener = () => {
-      unsubscribeProfile?.();
-      unsubscribeProfile = undefined;
+    const clearProfileTimeout = () => {
       if (profileTimeout) clearTimeout(profileTimeout);
       profileTimeout = undefined;
     };
 
+    const clearProfileListener = () => {
+      unsubscribeProfile?.();
+      unsubscribeProfile = undefined;
+      clearProfileTimeout();
+    };
+
     const unsubscribeAuth = onAuthStateChanged(auth, async (u) => {
+      const sequence = ++authSequence;
       clearProfileListener();
       if (u) {
         setDatabaseError(null);
+        profileTimeout = setTimeout(() => {
+          if (sequence !== authSequence) return;
+          authSequence += 1;
+          console.error('Tempo excedido ao carregar o perfil do usuário.');
+          setDatabaseError('Não foi possível carregar seu perfil no Firebase. Verifique a conexão e tente novamente.');
+          setUser(null);
+          setEmpresaId(null);
+          setUserRole(null);
+          setLoadingAuth(false);
+          clearProfileListener();
+        }, 10000);
         let claims: Record<string, unknown> = {};
         try {
           claims = (await u.getIdTokenResult(true)).claims;
@@ -228,6 +288,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         }
         setPlatformOwner(isDeveloper);
         if (isDeveloper) {
+          clearProfileTimeout();
           setUser(u);
           setUserRole('developer');
           setEmpresaId(null);
@@ -235,6 +296,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           setLoadingAuth(false);
           return;
         }
+        if (sequence !== authSequence) return;
         const profileRef = ref(db, `users/${u.uid}`);
         try {
           const profileSnapshot = await get(profileRef);
@@ -258,24 +320,17 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             message: error?.message
           });
           setDatabaseError(`Não foi possível criar o perfil do usuário. Código: ${error?.code || 'unknown'}. ${error?.message || ''}`);
+            clearProfileTimeout();
           setUser(null);
           setEmpresaId(null);
           setUserRole(null);
           setLoadingAuth(false);
           return;
         }
-        profileTimeout = setTimeout(() => {
-          console.error('Tempo excedido ao carregar o perfil do usuário.');
-          setDatabaseError('Não foi possível carregar seu perfil no Firebase. Verifique a conexão e tente novamente.');
-          setUser(null);
-          setEmpresaId(null);
-          setUserRole(null);
-          setLoadingAuth(false);
-        }, 10000);
-
         unsubscribeProfile = onValue(
           profileRef,
           (snap) => {
+              if (sequence !== authSequence) return;
             if (!snap.exists()) return;
             const data = snap.val();
             setEmpresaId(data?.empresaId || null);
@@ -291,8 +346,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
               setDadosEmpresa(null);
             }
             setUser(u);
+              clearProfileTimeout();
             setLoadingAuth(false);
-            clearProfileListener();
           },
           (error) => {
             console.error('Não foi possível carregar o perfil do usuário:', error);
@@ -311,7 +366,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         setUser(null);
         setEmpresaId(null);
         setUserRole(null);
-        setPlatformOwner(false);
         setPlatformOwner(false);
         setDadosEmpresa(null);
         setDatabaseError(null);
