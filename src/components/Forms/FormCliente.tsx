@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Glasses, MapPin } from 'lucide-react';
 import { Cliente, MedidaOtica, Prescricao } from '../../types';
+import { formatCEP, formatCPF, formatPhone } from '../../utils/documentMask';
 
 interface FormClienteProps {
   data: Cliente | null;
@@ -26,6 +27,13 @@ export function FormCliente({ data, onSave, onClose, onDirtyChange }: FormClient
 
   const handleChange = (field: string, value: any) => setForm((prev: any) => ({ ...prev, [field]: value }));
   const handleNested = (section: string, field: string, value: any) => setForm((prev: any) => ({ ...prev, [section]: { ...prev[section], [field]: value } }));
+  const handleDocumentValue = (field: 'cpf' | 'tel', value: string) => {
+    const formattedValue = field === 'cpf' ? formatCPF(value) : formatPhone(value);
+    handleChange(field, formattedValue);
+  };
+  const handleAddressValue = (field: 'cep', value: string) => {
+    handleNested('endereco', field, formatCEP(value));
+  };
   const handlePresc = (group: 'longe' | 'perto', eye: 'od'|'oe', field: string, value: any) => setForm((prev: any) => ({ ...prev, prescricao: { ...prev.prescricao, [group]: { ...prev.prescricao[group], [eye]: { ...prev.prescricao[group][eye], [field]: value } } } }));
 
   const inputClass = "w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3 text-[14px] outline-none focus:border-[var(--vistta-violet)]";
@@ -44,8 +52,8 @@ export function FormCliente({ data, onSave, onClose, onDirtyChange }: FormClient
           <h3 className="text-[13px] font-bold text-indigo-500 uppercase mb-4 flex items-center gap-2"><Users size={16}/> Dados Pessoais</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div><label className={labelClass}>Nome Completo</label><input required value={form.nome} onChange={e=>handleChange('nome', e.target.value)} className={inputClass} /></div>
-            <div><label className={labelClass}>WhatsApp</label><input required value={form.tel} onChange={e=>handleChange('tel', e.target.value)} className={inputClass} placeholder="(00) 00000-0000" /></div>
-            <div><label className={labelClass}>CPF / CNPJ</label><input value={form.cpf} onChange={e=>handleChange('cpf', e.target.value)} className={inputClass} /></div>
+            <div><label className={labelClass}>WhatsApp</label><input required value={form.tel} onChange={e=>handleDocumentValue('tel', e.target.value)} className={inputClass} placeholder="(00) 00000-0000" /></div>
+            <div><label className={labelClass}>CPF / CNPJ</label><input value={form.cpf} onChange={e=>handleDocumentValue('cpf', e.target.value)} className={inputClass} /></div>
             <div><label className={labelClass}>Nascimento</label><input type="date" value={form.nasc} onChange={e=>handleChange('nasc', e.target.value)} className={inputClass} /></div>
             <div className="md:col-span-2"><label className={labelClass}>E-mail</label><input type="email" value={form.email} onChange={e=>handleChange('email', e.target.value)} className={inputClass} /></div>
           </div>
@@ -54,7 +62,7 @@ export function FormCliente({ data, onSave, onClose, onDirtyChange }: FormClient
         <div className="border-t pt-6">
           <h3 className="text-[13px] font-bold text-slate-500 uppercase mb-4 flex items-center gap-2"><MapPin size={16}/> Endereço</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {([['cep','CEP'], ['logradouro','Logradouro'], ['numero','Número'], ['complemento','Complemento'], ['bairro','Bairro'], ['cidade','Cidade'], ['estado','UF']] as const).map(([field, label]) => <div key={field} className={field === 'logradouro' ? 'col-span-2' : ''}><label className={labelClass}>{label}</label><input value={form.endereco[field] || ''} onChange={e=>handleNested('endereco', field, e.target.value)} className={inputClass} /></div>)}
+            {([['cep','CEP'], ['logradouro','Logradouro'], ['numero','Número'], ['complemento','Complemento'], ['bairro','Bairro'], ['cidade','Cidade'], ['estado','UF']] as const).map(([field, label]) => <div key={field} className={field === 'logradouro' ? 'col-span-2' : ''}><label className={labelClass}>{label}</label><input value={form.endereco[field] || ''} onChange={e=>field === 'cep' ? handleAddressValue('cep', e.target.value) : handleNested('endereco', field, e.target.value)} className={inputClass} /></div>)}
           </div>
         </div>
 

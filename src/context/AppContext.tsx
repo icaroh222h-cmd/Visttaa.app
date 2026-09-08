@@ -250,6 +250,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     if (!user) throw new Error('Usuário não autenticado.');
     if (!nomeNormalizado) throw new Error('Informe o nome da ótica.');
     if (empresaId) return;
+    setDatabaseError(null);
 
     await ensureUserProfile(user);
 
@@ -296,6 +297,11 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       console.info('[EMPRESA] Vinculando perfil', { userPath, empresaId: empresaRef.key });
       await update(ref(db, userPath), profileUpdate);
       console.info('[EMPRESA] Ambiente criado', { path: companyPath, empresaId: empresaRef.key });
+      setEmpresaId(empresaRef.key);
+      setUserRole('admin');
+      setDadosEmpresa({ nome: nomeNormalizado });
+      setDatabaseError(null);
+      setActiveTab('dashboard');
       void trackEvent('empresa_criada');
     } catch (error: any) {
       console.error('[EMPRESA] Erro ao criar ambiente', { companyPath, userPath, code: error?.code, message: error?.message, uid: user.uid });
@@ -462,7 +468,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
                 } catch (error: any) {
                   console.error('[EMPRESA] Erro ao carregar empresa', { path: `empresas/${data.empresaId}/info`, code: error?.code, message: error?.message, empresaId: data.empresaId, uid: u.uid });
                   captureFirebaseError(error, { module: 'autenticacao', action: 'carregar_empresa', operation: 'database_read' });
-                  setDatabaseError(`Não foi possível carregar a empresa. Código: ${error?.code || 'unknown'}. ${error?.message || ''}`);
+                  setEmpresaId(null);
+                  setUserRole(null);
+                  setDadosEmpresa(null);
+                  setDatabaseError('Não foi possível validar o ambiente da sua ótica. Tente criar ou carregar o ambiente novamente.');
                 }
             } else {
               setDadosEmpresa(null);

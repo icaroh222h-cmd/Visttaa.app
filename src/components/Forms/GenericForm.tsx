@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
+import { formatDocument } from '../../utils/documentMask';
 
 export function GenericForm({ config, initialData, onSave, onClose, onDirtyChange }: any) {
   const [form, setForm] = useState(initialData || config.defaultData);
   const [submitError, setSubmitError] = useState('');
   const [saving, setSaving] = useState(false);
-  
-  const handleChange = (field: string, value: any) => setForm((prev: any) => ({ ...prev, [field]: value }));
-  
+
+  const handleChange = (field: any, value: any) => {
+    const nextValue = field.mask ? formatDocument(String(value ?? ''), field.mask) : String(value ?? '');
+    setForm((prev: any) => ({ ...prev, [field.name]: nextValue }));
+  };
+
   const inputClass = "w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3.5 text-[15px] outline-none focus:border-[var(--vistta-violet)] transition-all text-slate-900 dark:text-white";
   const labelClass = "text-[12px] font-bold text-slate-500 uppercase tracking-wider mb-2 block";
   
@@ -25,12 +29,12 @@ export function GenericForm({ config, initialData, onSave, onClose, onDirtyChang
           <div key={f.name}>
             <label className={labelClass}>{f.label} {f.required && '*'}</label>
             {f.type === 'select' ? (
-              <select required={f.required} value={form[f.name] || ''} onChange={e=>handleChange(f.name, e.target.value)} className={inputClass}>
+              <select required={f.required} value={form[f.name] || ''} onChange={e=>handleChange(f, e.target.value)} className={inputClass}>
                 <option value="">Selecione...</option>
                 {f.options.map((o: any) => <option key={o.val} value={o.val}>{o.label}</option>)}
               </select>
             ) : (
-              <input type={f.type} step={f.step} required={f.required} placeholder={f.placeholder} autoComplete={f.type === 'password' ? 'new-password' : undefined} value={form[f.name] || ''} onChange={e=>handleChange(f.name, e.target.value)} className={inputClass} />
+              <input type={f.type} step={f.step} required={f.required} placeholder={f.placeholder} autoComplete={f.type === 'password' ? 'new-password' : undefined} value={form[f.name] || ''} onChange={e=>handleChange(f, e.target.value)} className={inputClass} />
             )}
           </div>
         ))}

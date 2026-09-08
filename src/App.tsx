@@ -2,7 +2,7 @@ import React, { lazy, Suspense, useEffect, useState } from 'react';
 import { AppProvider, useAppContext } from './context/AppContext';
 import { Sidebar } from './components/Navigation/Sidebar';
 
-import { Home, ShoppingCart, Boxes, Users, Menu, Moon, Sun, LogOut } from 'lucide-react';
+import { Home, ShoppingCart, Boxes, Users, Menu, Moon, Sun, LogOut, Search, X, Plus, ArrowRight } from 'lucide-react';
 import { LogoVistta } from './components/SharedUI';
 
 const AuthScreen = lazy(() => import('./screens/AuthScreen').then(module => ({ default: module.AuthScreen })));
@@ -20,9 +20,11 @@ const SetupOticaScreen = lazy(() => import('./screens/SetupOticaScreen').then(mo
 const PlatformAdminScreen = lazy(() => import('./screens/PlatformAdminScreen').then(module => ({ default: module.PlatformAdminScreen })));
 
 function MainLayout() {
-  const { activeTab, user, loadingAuth, setActiveTab, carrinho, userRole, platformOwner, developerClaimsPending, dadosEmpresa, empresaId, databaseError, logout } = useAppContext();
+  const { activeTab, user, loadingAuth, setActiveTab, carrinho, userRole, platformOwner, developerClaimsPending, dadosEmpresa, empresaId, databaseError, logout, clientes, produtos, vendas, ordensServico } = useAppContext();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isDark, setIsDark] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
+  const [commandQuery, setCommandQuery] = useState('');
 
   useEffect(() => {
     const dark = localStorage.getItem('otica_theme') === 'dark';
@@ -36,6 +38,44 @@ function MainLayout() {
     localStorage.setItem('otica_theme', next ? 'dark' : 'light');
     document.documentElement.classList.toggle('dark', next);
   };
+
+  useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setCommandOpen(true);
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'n') {
+        event.preventDefault();
+        setCommandOpen(true);
+        setCommandQuery('nova');
+      }
+    };
+    window.addEventListener('keydown', handleShortcut);
+    return () => window.removeEventListener('keydown', handleShortcut);
+  }, []);
+
+  const openModule = (tab: string) => {
+    setCommandOpen(false);
+    setCommandQuery('');
+    setActiveTab(tab);
+  };
+
+  const normalizedQuery = commandQuery.trim().toLocaleLowerCase('pt-BR');
+  const searchResults = normalizedQuery.length < 2 ? [] : [
+    ...clientes.filter(item => `${item.nome} ${item.cpf} ${item.tel}`.toLocaleLowerCase('pt-BR').includes(normalizedQuery)).slice(0, 4).map(item => ({ type: 'Cliente', label: item.nome, detail: item.tel || item.cpf, tab: 'clientes' })),
+    ...produtos.filter(item => `${item.marca} ${item.modelo} ${item.codigo}`.toLocaleLowerCase('pt-BR').includes(normalizedQuery)).slice(0, 4).map(item => ({ type: 'Produto', label: `${item.marca} ${item.modelo}`, detail: item.codigo, tab: 'estoque' })),
+    ...vendas.filter(item => `${item.id} ${item.pag}`.toLocaleLowerCase('pt-BR').includes(normalizedQuery)).slice(0, 4).map(item => ({ type: 'Venda', label: `Venda ${item.id.slice(-6)}`, detail: item.pag, tab: 'vendas' })),
+    ...ordensServico.filter(item => `${item.id} ${item.clienteId} ${item.status}`.toLocaleLowerCase('pt-BR').includes(normalizedQuery)).slice(0, 4).map(item => ({ type: 'Ordem de serviço', label: `OS ${item.id.slice(-6)}`, detail: item.status.replace(/_/g, ' '), tab: 'ordens' }))
+  ].slice(0, 8);
+
+  const quickActions = [
+    { label: 'Nova venda', detail: 'Abrir o ponto de venda', tab: 'vendas' },
+    { label: 'Novo cliente', detail: 'Cadastrar uma pessoa', tab: 'clientes' },
+    { label: 'Novo orçamento', detail: 'Montar uma proposta', tab: 'orcamentos' },
+    { label: 'Nova ordem de serviço', detail: 'Acompanhar produção', tab: 'ordens' },
+    { label: 'Entrada de estoque', detail: 'Consultar e ajustar produtos', tab: 'estoque' }
+  ];
 
   // Tela de carregamento enquanto o Firebase verifica o login
   if (loadingAuth) {
@@ -89,6 +129,9 @@ function MainLayout() {
         <button onClick={toggleTheme} aria-label={isDark ? 'Ativar tema claro' : 'Ativar tema escuro'} aria-pressed={isDark} className="absolute top-4 right-4 z-40 w-10 h-10 rounded-full bg-white/80 dark:bg-slate-800 border border-[#e7e1ec] dark:border-slate-700 flex items-center justify-center text-slate-500 hover:text-[#6d4aff] shadow-sm backdrop-blur" title="Alternar tema">
           {isDark ? <Sun size={18} /> : <Moon size={18} />}
         </button>
+        <button type="button" onClick={() => setCommandOpen(true)} className="absolute top-4 right-16 z-40 hidden h-10 items-center gap-2 rounded-full border border-[#e7e1ec] bg-white/80 px-3 text-xs font-bold text-slate-500 shadow-sm backdrop-blur transition-colors hover:text-[#6d4aff] dark:border-slate-700 dark:bg-slate-800 sm:flex" title="Pesquisar no VISTTA (Ctrl+K)">
+          <Search size={16} /> <span>Buscar</span><kbd className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] dark:bg-slate-700">Ctrl K</kbd>
+        </button>
       <main className="flex-1 overflow-y-auto p-4 pb-5 pt-16 sm:p-10 sm:pt-10 lg:p-12 relative z-10 custom-scrollbar h-full vistta-grid">
         <Suspense fallback={<ScreenLoading />}>
         {activeTab === 'dashboard' && <DashboardScreen />}
@@ -127,6 +170,25 @@ function MainLayout() {
             ].map(([tab, label]) => <button key={tab} onClick={() => { if (tab === 'platform') window.history.pushState({}, '', '/admin'); setActiveTab(tab); setMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-slate-700">{label}</button>)}
           </div>
           <button onClick={() => logout().catch((error) => console.error('Não foi possível sair:', error))} className="mt-6 flex w-full items-center gap-3 border-t border-slate-100 px-4 pt-5 text-left font-bold text-rose-500 dark:border-slate-700"><LogOut size={18} /> Sair da conta</button>
+        </div>
+      </div>}
+      {commandOpen && <div className="fixed inset-0 z-[90] flex items-start justify-center bg-slate-950/45 p-4 pt-[12vh] backdrop-blur-sm" onMouseDown={event => { if (event.target === event.currentTarget) { setCommandOpen(false); setCommandQuery(''); } }}>
+        <div className="w-full max-w-2xl overflow-hidden rounded-3xl border border-[var(--vistta-border)] bg-[var(--vistta-surface)] shadow-[0_28px_80px_rgba(15,11,36,.28)]" role="dialog" aria-modal="true" aria-label="Busca e ações rápidas">
+          <div className="flex items-center gap-3 border-b border-[var(--vistta-border)] px-5 py-4">
+            <Search size={20} className="shrink-0 text-[var(--vistta-violet)]" />
+            <input autoFocus value={commandQuery} onChange={event => setCommandQuery(event.target.value)} placeholder="Buscar cliente, produto, venda ou OS..." className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-[var(--vistta-ink)] outline-none placeholder:text-[var(--vistta-secondary)] dark:text-white" />
+            <button type="button" onClick={() => { setCommandOpen(false); setCommandQuery(''); }} aria-label="Fechar busca" className="rounded-full p-2 text-[var(--vistta-secondary)] hover:bg-[var(--vistta-muted-surface)]"><X size={18} /></button>
+          </div>
+          <div className="max-h-[55vh] overflow-y-auto p-3">
+            {normalizedQuery.length < 2 || normalizedQuery === 'nova' ? <>
+              <p className="px-3 pb-2 pt-1 text-[11px] font-bold uppercase tracking-[.16em] text-[var(--vistta-secondary)]">Ações rápidas</p>
+              {quickActions.map(action => <button key={action.tab} type="button" onClick={() => openModule(action.tab)} className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition-colors hover:bg-[var(--vistta-muted-surface)]"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--vistta-lavender)] text-[var(--vistta-violet)]"><Plus size={17} /></span><span className="min-w-0 flex-1"><strong className="block text-sm text-[var(--vistta-ink)] dark:text-white">{action.label}</strong><small className="text-xs text-[var(--vistta-secondary)]">{action.detail}</small></span><ArrowRight size={16} className="text-[var(--vistta-secondary)]" /></button>)}
+            </> : searchResults.length ? <>
+              <p className="px-3 pb-2 pt-1 text-[11px] font-bold uppercase tracking-[.16em] text-[var(--vistta-secondary)]">Resultados</p>
+              {searchResults.map((result, index) => <button key={`${result.type}-${result.label}-${index}`} type="button" onClick={() => openModule(result.tab)} className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition-colors hover:bg-[var(--vistta-muted-surface)]"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--vistta-lavender)] text-[var(--vistta-violet)]"><Search size={16} /></span><span className="min-w-0 flex-1"><small className="block text-[10px] font-bold uppercase tracking-wider text-[var(--vistta-violet)]">{result.type}</small><strong className="block truncate text-sm text-[var(--vistta-ink)] dark:text-white">{result.label}</strong><small className="block truncate text-xs text-[var(--vistta-secondary)]">{result.detail}</small></span><ArrowRight size={16} className="text-[var(--vistta-secondary)]" /></button>)}
+            </> : <div className="px-4 py-10 text-center text-sm text-[var(--vistta-secondary)]">Nenhum registro encontrado para “{commandQuery}”.</div>}
+          </div>
+          <div className="border-t border-[var(--vistta-border)] px-5 py-3 text-[11px] text-[var(--vistta-secondary)]">Use `Ctrl + K` para buscar ou `Ctrl + N` para iniciar uma ação.</div>
         </div>
       </div>}
       </div>

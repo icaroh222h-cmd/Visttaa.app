@@ -12,11 +12,24 @@ const localDateKey = (date: Date) => {
 
 export function DashboardScreen() {
   const { produtos, vendas, clientes, orcamentos, ordensServico, caixaAberto, setActiveTab, user } = useAppContext();
+  const now = new Date();
+  const todayKey = localDateKey(now);
+  const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const estoqueTotal = produtos.reduce((acc, p) => acc + Number(p.qtd || 0), 0);
   const vendasTotal = vendas.reduce((acc, v) => acc + Number(v.total || 0), 0);
+  const vendasHoje = vendas.filter(v => localDateKey(new Date(v.data)) === todayKey);
+  const vendasMes = vendas.filter(v => String(v.data || '').startsWith(monthPrefix));
+  const faturamentoHoje = vendasHoje.reduce((acc, v) => acc + Number(v.total || 0), 0);
+  const faturamentoMes = vendasMes.reduce((acc, v) => acc + Number(v.total || 0), 0);
   const estoqueCritico = produtos.filter(p => Number(p.qtd) < Number(p.min)).length;
   const orcamentosPendentes = orcamentos.filter(o => o.status === 'pendente').length;
   const osPendentes = ordensServico.filter(o => !['entregue', 'cancelada'].includes(o.status)).length;
+  const osProntas = ordensServico.filter(o => o.status === 'pronto_retirada').length;
+  const osAtrasadas = ordensServico.filter(o => {
+    if (!o.previsaoEntrega || ['entregue', 'cancelada'].includes(o.status)) return false;
+    const prazo = new Date(`${o.previsaoEntrega}T23:59:59`);
+    return !Number.isNaN(prazo.getTime()) && prazo < now;
+  }).length;
   const salesByDay = vendas.reduce<Record<string, number>>((acc, venda) => {
     const date = new Date(venda.data);
     if (Number.isNaN(date.getTime())) return acc;
@@ -46,10 +59,10 @@ export function DashboardScreen() {
         </div>} />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <DashCard title="Estoque Total" value={estoqueTotal} subtitle="unidades cadastradas" icon={Boxes} />
-        <DashCard title="Vendas do período" value={formatMoney(vendasTotal)} subtitle={`${vendas.length} venda${vendas.length === 1 ? '' : 's'} registrada${vendas.length === 1 ? '' : 's'}`} icon={TrendingUp} color="text-emerald-500" />
-        <DashCard title="Clientes Base" value={clientes.length} subtitle="cadastros ativos" icon={Users} />
-        <DashCard title="Estoque Crítico" value={estoqueCritico} subtitle={estoqueCritico ? 'requer atenção' : 'operação saudável'} icon={AlertTriangle} bg={estoqueCritico ? 'bg-[#fff5ed]' : 'bg-white dark:bg-slate-800'} color={estoqueCritico ? 'text-orange-500' : 'text-emerald-500'} border={estoqueCritico ? 'border-orange-100' : 'border-slate-100 dark:border-slate-700'} />
+        <DashCard title="Faturamento hoje" value={formatMoney(faturamentoHoje)} subtitle={`${vendasHoje.length} venda${vendasHoje.length === 1 ? '' : 's'} hoje`} icon={TrendingUp} onClick={() => setActiveTab('vendas')} color="text-emerald-500" />
+        <DashCard title="Faturamento do mês" value={formatMoney(faturamentoMes)} subtitle={`${vendasMes.length} venda${vendasMes.length === 1 ? '' : 's'} no período`} icon={TrendingUp} onClick={() => setActiveTab('vendas')} color="text-emerald-500" />
+        <DashCard title="Clientes Base" value={clientes.length} subtitle="cadastros ativos" icon={Users} onClick={() => setActiveTab('clientes')} />
+        <DashCard title="Estoque Crítico" value={estoqueCritico} subtitle={estoqueCritico ? 'requer atenção' : 'operação saudável'} icon={AlertTriangle} onClick={() => setActiveTab('estoque')} bg={estoqueCritico ? 'bg-[#fff5ed]' : 'bg-white dark:bg-slate-800'} color={estoqueCritico ? 'text-orange-500' : 'text-emerald-500'} border={estoqueCritico ? 'border-orange-100' : 'border-slate-100 dark:border-slate-700'} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-[1.45fr_.8fr] gap-5 mb-5">
@@ -67,6 +80,7 @@ export function DashboardScreen() {
           <button onClick={() => setActiveTab('estoque')} className="w-full flex items-center justify-between gap-3 p-3 rounded-2xl bg-[#fff5ed] dark:bg-[#3b2a35] hover:bg-[#4b3540] transition-colors text-left"><span className="flex items-center gap-3"><span className="w-8 h-8 rounded-xl bg-white dark:bg-[#211936] flex items-center justify-center text-orange-500"><Boxes size={16} /></span><span><strong className="block text-sm text-[#3b2a45] dark:text-white">Estoque crítico</strong><small className="text-xs text-slate-500 dark:text-[#b9afca]">{estoqueCritico ? `${estoqueCritico} item(ns) abaixo do mínimo` : 'Nenhum item abaixo do mínimo'}</small></span></span><ArrowUpRight size={16} className="text-slate-400" /></button>
           <button onClick={() => setActiveTab('orcamentos')} className="w-full flex items-center justify-between gap-3 p-3 rounded-2xl bg-[#f7f3ff] dark:bg-[#2d2544] hover:bg-[#3a3155] transition-colors text-left"><span className="flex items-center gap-3"><span className="w-8 h-8 rounded-xl bg-white dark:bg-[#211936] flex items-center justify-center text-[#6d4aff]"><FileText size={16} /></span><span><strong className="block text-sm text-[#3b2a45] dark:text-white">Orçamentos pendentes</strong><small className="text-xs text-slate-500 dark:text-[#b9afca]">{orcamentosPendentes} aguardando retorno</small></span></span><ArrowUpRight size={16} className="text-slate-400" /></button>
           <button onClick={() => setActiveTab('ordens')} className="w-full flex items-center justify-between gap-3 p-3 rounded-2xl bg-[#edf8f4] dark:bg-[#203a36] hover:bg-[#294b45] transition-colors text-left"><span className="flex items-center gap-3"><span className="w-8 h-8 rounded-xl bg-white dark:bg-[#211936] flex items-center justify-center text-emerald-600"><Wrench size={16} /></span><span><strong className="block text-sm text-[#3b2a45] dark:text-white">Ordens em andamento</strong><small className="text-xs text-slate-500 dark:text-[#b9afca]">{osPendentes} aguardando conclusão</small></span></span><ArrowUpRight size={16} className="text-slate-400" /></button>
+          <button onClick={() => setActiveTab('ordens')} className="w-full flex items-center justify-between gap-3 p-3 rounded-2xl bg-[#fff1f0] dark:bg-[#422b37] hover:bg-[#533441] transition-colors text-left"><span className="flex items-center gap-3"><span className="w-8 h-8 rounded-xl bg-white dark:bg-[#211936] flex items-center justify-center text-rose-500"><AlertTriangle size={16} /></span><span><strong className="block text-sm text-[#3b2a45] dark:text-white">Prazo das OS</strong><small className="text-xs text-slate-500 dark:text-[#b9afca]">{osAtrasadas} atrasada{osAtrasadas === 1 ? '' : 's'} · {osProntas} pronta{osProntas === 1 ? '' : 's'}</small></span></span><ArrowUpRight size={16} className="text-slate-400" /></button>
         </div></section>
       </div>
 

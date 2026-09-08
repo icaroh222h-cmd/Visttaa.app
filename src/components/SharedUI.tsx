@@ -9,12 +9,13 @@ interface DashCardProps {
   icon: LucideIcon; 
   bg?: string; 
   color?: string; 
+  onClick?: () => void;
   border?: string; 
 }
 
-export function DashCard({ title, value, subtitle, icon: Icon, bg = "bg-white dark:bg-slate-800", color = "text-slate-900 dark:text-white", border = "border-slate-100 dark:border-slate-700" }: DashCardProps) {
-  return (
-    <div className={`group p-5 rounded-[24px] border shadow-[0_10px_35px_rgba(48,32,77,.05)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_16px_38px_rgba(48,32,77,.1)] ${bg} ${border}`}>
+export function DashCard({ title, value, subtitle, icon: Icon, onClick, bg = "bg-white dark:bg-slate-800", color = "text-slate-900 dark:text-white", border = "border-slate-100 dark:border-slate-700" }: DashCardProps) {
+  const content = (
+    <>
       <div className="flex items-start justify-between mb-4">
         <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${bg === 'bg-white dark:bg-slate-800' ? 'bg-[#eeeaff] text-[#6d4aff]' : color.replace('text-', 'bg-').replace('500', '100') + ' ' + color}`}>
           <Icon size={24} />
@@ -26,8 +27,10 @@ export function DashCard({ title, value, subtitle, icon: Icon, bg = "bg-white da
         <div className={`text-2xl font-black ${color}`}>{value}</div>
         {subtitle && <p className="text-[12px] font-medium text-slate-400 mt-1">{subtitle}</p>}
       </div>
-    </div>
+    </>
   );
+  const className = `group w-full text-left p-5 rounded-[24px] border shadow-[0_10px_35px_rgba(48,32,77,.05)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_16px_38px_rgba(48,32,77,.1)] ${onClick ? 'cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#6d4aff]/40' : ''} ${bg} ${border}`;
+  return onClick ? <button type="button" onClick={onClick} className={className}>{content}</button> : <div className={className}>{content}</div>;
 }
 
 export function ActionCard({ icon: Icon, title, desc, onClick, color, bg }: any) {
