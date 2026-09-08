@@ -2,7 +2,7 @@ import React, { lazy, Suspense, useEffect, useState } from 'react';
 import { AppProvider, useAppContext } from './context/AppContext';
 import { Sidebar } from './components/Navigation/Sidebar';
 
-import { Home, ShoppingCart, Boxes, Users, Menu, Moon, Sun, LogOut, Search, X, Plus, ArrowRight, Sparkles, BookOpen, CheckCircle2, Wallet } from 'lucide-react';
+import { Home, ShoppingCart, Boxes, Users, Menu, Moon, Sun, LogOut, Search, X, Plus, ArrowRight } from 'lucide-react';
 import { LogoVistta } from './components/SharedUI';
 
 const AuthScreen = lazy(() => import('./screens/AuthScreen').then(module => ({ default: module.AuthScreen })));
@@ -25,19 +25,12 @@ function MainLayout() {
   const [isDark, setIsDark] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [commandQuery, setCommandQuery] = useState('');
-  const [showTutorial, setShowTutorial] = useState(false);
 
   useEffect(() => {
     const dark = localStorage.getItem('otica_theme') === 'dark';
     setIsDark(dark);
     document.documentElement.classList.toggle('dark', dark);
   }, []);
-
-  useEffect(() => {
-    if (!user) return;
-    const hasSeenTutorial = localStorage.getItem('vistta_tutorial_seen') === 'true';
-    setShowTutorial(!hasSeenTutorial);
-  }, [user]);
 
   const toggleTheme = () => {
     const next = !isDark;
@@ -128,49 +121,8 @@ function MainLayout() {
   }
 
   // Renderiza o Sistema com o Menu Lateral
-  const closeTutorial = () => {
-    localStorage.setItem('vistta_tutorial_seen', 'true');
-    setShowTutorial(false);
-  };
-
   return (
-    <div className="flex min-h-[100dvh] h-[100dvh] w-full vistta-shell text-slate-900 dark:text-white overflow-hidden">
-      {showTutorial && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/55 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-2xl rounded-[30px] border border-[#e8ddff] bg-white p-6 shadow-[0_30px_90px_rgba(45,30,89,.22)] sm:p-8">
-            <div className="mb-6 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#6d4aff] text-white"><Sparkles size={20} /></div>
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[.18em] text-[#6d4aff]">Primeiros passos</p>
-                  <h3 className="text-xl font-bold text-[#201735]">Tutorial de uso rápido</h3>
-                </div>
-              </div>
-              <button type="button" onClick={closeTutorial} className="rounded-full bg-slate-100 p-2 text-slate-500 hover:bg-slate-200" aria-label="Fechar tutorial"><X size={18} /></button>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              {[
-                { title: '1. Abra o caixa', desc: 'Antes de vender, abra o caixa e confira o saldo inicial.', icon: Wallet },
-                { title: '2. Cadastre clientes', desc: 'Registre cliente, endereço, WhatsApp e receita para atender sem perder histórico.', icon: Users },
-                { title: '3. Organize estoque', desc: 'Cadastre produtos com custo, venda e estoque mínimo para evitar faltas.', icon: Boxes },
-                { title: '4. Use a ajuda', desc: 'Acesse a central de suporte para tutorial, documentação e contato.', icon: BookOpen }
-              ].map(({ title, desc, icon: Icon }) => (
-                <div key={title} className="rounded-2xl border border-[#efe4ff] bg-[#f9f6ff] p-4">
-                  <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-[#efe7ff] text-[#6d4aff]"><Icon size={18} /></div>
-                  <h4 className="mb-2 font-bold text-[#201735]">{title}</h4>
-                  <p className="text-sm leading-6 text-slate-600">{desc}</p>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-7 flex items-center justify-between border-t border-slate-100 pt-5">
-              <div className="flex items-center gap-2 text-sm text-slate-500"><CheckCircle2 size={16} className="text-emerald-500" /> Fluxo recomendado</div>
-              <button type="button" onClick={closeTutorial} className="rounded-xl bg-[#6d4aff] px-5 py-3 text-sm font-bold text-white hover:bg-[#5637e8]">Entendi</button>
-            </div>
-          </div>
-        </div>
-      )}
+    <div className="flex min-h-[100vh] min-h-[100dvh] min-h-[100svh] w-full vistta-shell text-slate-900 dark:text-white overflow-hidden">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative mobile-safe-bottom md:pb-0">
         {databaseError && <div className="absolute top-0 left-0 right-0 z-50 bg-rose-600 text-white px-4 py-2 text-center text-sm font-semibold">{databaseError}</div>}

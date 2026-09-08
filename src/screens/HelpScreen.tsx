@@ -20,10 +20,10 @@ const tutorialIntro = [
 
 export function HelpScreen() {
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-8">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 sm:gap-6 md:gap-8 px-0 pb-8 sm:px-1">
       <ScreenHeader eyebrow="Suporte / Central de treinamento" title="Ajuda e treinamento" description="Aprenda o fluxo recomendado para operar a VISTTA com segurança e manter os dados da ótica organizados." />
 
-      <section className="rounded-3xl border border-[#e9e2ff] bg-[#f7f3ff] p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+      <section className="rounded-3xl border border-[#e9e2ff] bg-[#f7f3ff] p-4 shadow-sm sm:p-5 dark:border-slate-700 dark:bg-slate-800">
         <div className="mb-5 flex items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#6d4aff] text-white"><Sparkles size={20} /></div>
           <div>

@@ -18,15 +18,29 @@
     --vistta-secondary: #716a7d;
   }
 
-  html { background: var(--vistta-paper); }
+  html {
+    background: var(--vistta-paper);
+    height: 100%;
+  }
 
   body {
     @apply leading-relaxed;
+    min-height: 100vh;
+    min-height: 100dvh;
+    min-height: 100svh;
     background: var(--vistta-paper);
     color: var(--vistta-ink);
     font-family: 'DM Sans', 'Segoe UI', sans-serif;
     -webkit-font-smoothing: antialiased;
     overflow-x: hidden;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  #root {
+    min-height: 100vh;
+    min-height: 100dvh;
+    min-height: 100svh;
   }
 
   button, input, select, textarea { font: inherit; }
@@ -191,7 +205,10 @@
 }
 
 @media (max-width: 767px) {
-  html, body, #root { min-height: 100%; }
+  html, body, #root {
+    min-height: 100%;
+    height: auto;
+  }
 
   .mobile-safe-bottom {
     padding-bottom: calc(70px + env(safe-area-inset-bottom));
@@ -200,6 +217,14 @@
   .mobile-bottom-nav {
     height: calc(70px + env(safe-area-inset-bottom));
     padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+@supports (height: 100dvh) {
+  @media (max-width: 767px) {
+    html, body, #root {
+      min-height: 100dvh;
+    }
   }
 }
 .dark .custom-scrollbar::-webkit-scrollbar-thumb {

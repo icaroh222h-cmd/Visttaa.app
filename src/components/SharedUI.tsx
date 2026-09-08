@@ -16,31 +16,31 @@ interface DashCardProps {
 export function DashCard({ title, value, subtitle, icon: Icon, onClick, bg = "bg-white dark:bg-slate-800", color = "text-slate-900 dark:text-white", border = "border-slate-100 dark:border-slate-700" }: DashCardProps) {
   const content = (
     <>
-      <div className="flex items-start justify-between mb-4">
-        <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${bg === 'bg-white dark:bg-slate-800' ? 'bg-[#eeeaff] text-[#6d4aff]' : color.replace('text-', 'bg-').replace('500', '100') + ' ' + color}`}>
-          <Icon size={24} />
+      <div className="mb-3 flex items-start justify-between sm:mb-4">
+        <div className={`flex h-10 w-10 items-center justify-center rounded-2xl sm:h-11 sm:w-11 ${bg === 'bg-white dark:bg-slate-800' ? 'bg-[#eeeaff] text-[#6d4aff]' : color.replace('text-', 'bg-').replace('500', '100') + ' ' + color}`}>
+          <Icon size={20} className="sm:h-6 sm:w-6" />
         </div>
-        <span className="h-2 w-2 rounded-full bg-[#c6ed76] opacity-80 group-hover:scale-125 transition-transform" />
+        <span className="h-2 w-2 rounded-full bg-[#c6ed76] opacity-80 transition-transform group-hover:scale-125" />
       </div>
       <div>
-        <h3 className="text-[13px] font-bold text-slate-500 uppercase tracking-wider mb-1">{title}</h3>
-        <div className={`text-2xl font-black ${color}`}>{value}</div>
-        {subtitle && <p className="text-[12px] font-medium text-slate-400 mt-1">{subtitle}</p>}
+        <h3 className="mb-1 text-[11px] font-bold uppercase tracking-wider text-slate-500 sm:text-[13px]">{title}</h3>
+        <div className={`text-xl font-black sm:text-2xl ${color}`}>{value}</div>
+        {subtitle && <p className="mt-1 text-[11px] font-medium text-slate-400 sm:text-[12px]">{subtitle}</p>}
       </div>
     </>
   );
-  const className = `group w-full text-left p-5 rounded-[24px] border shadow-[0_10px_35px_rgba(48,32,77,.05)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_16px_38px_rgba(48,32,77,.1)] ${onClick ? 'cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#6d4aff]/40' : ''} ${bg} ${border}`;
+  const className = `group w-full text-left p-4 rounded-[20px] border shadow-[0_10px_35px_rgba(48,32,77,.05)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_16px_38px_rgba(48,32,77,.1)] sm:p-5 sm:rounded-[24px] ${onClick ? 'cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#6d4aff]/40' : ''} ${bg} ${border}`;
   return onClick ? <button type="button" onClick={onClick} className={className}>{content}</button> : <div className={className}>{content}</div>;
 }
 
 export function ActionCard({ icon: Icon, title, desc, onClick, color, bg }: any) {
   return (
-    <button onClick={onClick} className={`text-left p-5 rounded-[22px] border border-transparent hover:border-[#dcd5ee] shadow-[0_8px_24px_rgba(48,32,77,.04)] hover:shadow-[0_12px_28px_rgba(48,32,77,.1)] transition-all group ${bg}`}>
-      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 bg-white shadow-sm ${color} group-hover:scale-110 transition-transform`}>
-        <Icon size={24} />
+    <button onClick={onClick} className={`text-left rounded-[18px] border border-transparent p-4 shadow-[0_8px_24px_rgba(48,32,77,.04)] transition-all hover:border-[#dcd5ee] hover:shadow-[0_12px_28px_rgba(48,32,77,.1)] group sm:rounded-[22px] sm:p-5 ${bg}`}>
+      <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-white shadow-sm sm:mb-4 sm:h-12 sm:w-12 ${color} transition-transform group-hover:scale-110`}>
+        <Icon size={20} className="sm:h-6 sm:w-6" />
       </div>
-      <h3 className={`text-[16px] font-bold mb-2 ${color}`}>{title}</h3>
-      <p className="text-[13px] text-slate-500">{desc}</p>
+      <h3 className={`mb-1 text-[15px] font-bold sm:mb-2 sm:text-[16px] ${color}`}>{title}</h3>
+      <p className="text-[12px] text-slate-500 sm:text-[13px]">{desc}</p>
     </button>
   );
 }
@@ -56,7 +56,16 @@ export function FeedbackAlert({ type = 'error', children }: { type?: 'error' | '
 }
 
 export function ScreenHeader({ eyebrow, title, description, action }: { eyebrow?: string; title: string; description?: string; action?: React.ReactNode }) {
-  return <div className="mb-8 flex flex-col gap-5 border-b border-[var(--vistta-border)] pb-6 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-[11px] font-bold uppercase tracking-[.2em] text-[var(--vistta-violet)]">{eyebrow || 'VISTTA'}</p><h1 className="mt-2 font-display text-2xl font-bold tracking-tight text-[var(--vistta-ink)] dark:text-white sm:text-3xl">{title}</h1>{description && <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--vistta-secondary)]">{description}</p>}</div>{action}</div>;
+  return (
+    <div className="mb-5 flex flex-col gap-3 border-b border-[var(--vistta-border)] pb-4 sm:mb-8 sm:gap-5 sm:pb-6 md:flex-row md:items-end md:justify-between">
+      <div>
+        <p className="text-[10px] font-bold uppercase tracking-[.18em] text-[var(--vistta-violet)] sm:text-[11px]">{eyebrow || 'VISTTA'}</p>
+        <h1 className="mt-2 font-display text-xl font-bold tracking-tight text-[var(--vistta-ink)] dark:text-white sm:text-2xl md:text-3xl">{title}</h1>
+        {description && <p className="mt-2 max-w-2xl text-xs leading-5 text-[var(--vistta-secondary)] sm:text-sm sm:leading-6">{description}</p>}
+      </div>
+      {action}
+    </div>
+  );
 }
 
 export function ModalBase({ open, onClose, title, width = "max-w-md", children }: any) {
