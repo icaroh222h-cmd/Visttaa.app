@@ -6,6 +6,19 @@ import { ScreenHeader } from '../components/SharedUI';
 
 export function OrcamentosScreen() {
   const { orcamentos, clientes, setActiveTab, converterOrcamentoParaOs, excluirOrcamento } = useAppContext();
+  const [convertendoId, setConvertendoId] = React.useState<string | null>(null);
+
+  const converter = async (orcamento: any) => {
+    setConvertendoId(orcamento.id);
+    try {
+      await converterOrcamentoParaOs(orcamento);
+      setActiveTab('ordens');
+    } catch (error: any) {
+      alert(error.message);
+    } finally {
+      setConvertendoId(null);
+    }
+  };
   
   return (
     <div className="flex flex-col h-full">
@@ -36,7 +49,7 @@ export function OrcamentosScreen() {
                   <td className="py-4 px-6 text-right font-extrabold text-[15px] text-[var(--vistta-violet)]">{formatMoney(o.total)}</td>
                   <td className="py-4 px-6 text-center"><span className={`rounded-full px-3 py-1 text-[11px] font-bold ${o.status === 'pendente' ? 'bg-amber-50 text-amber-700' : o.status === 'aprovado' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{o.status}</span></td>
                   <td className="py-4 px-6 text-center">
-                    <div className="flex justify-center gap-2"><button disabled={o.status !== 'pendente'} onClick={() => converterOrcamentoParaOs(o).then(() => setActiveTab('ordens')).catch((error: any) => alert(error.message))} className="rounded-xl px-3 py-2 text-xs font-bold text-[var(--vistta-violet)] hover:bg-[var(--vistta-lavender)] disabled:cursor-not-allowed disabled:opacity-40">Converter em OS</button><button onClick={() => { if (window.confirm('Excluir este orçamento?')) excluirOrcamento(o.id).catch((error: any) => alert(error.message)); }} className="p-2 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-50"><Trash2 size={16} /></button></div>
+                    <div className="flex justify-center gap-2"><button disabled={o.status !== 'pendente' || convertendoId === o.id} onClick={() => void converter(o)} className="rounded-xl px-3 py-2 text-xs font-bold text-[var(--vistta-violet)] hover:bg-[var(--vistta-lavender)] disabled:cursor-not-allowed disabled:opacity-40">{convertendoId === o.id ? 'Convertendo...' : 'Converter em OS'}</button><button onClick={() => { if (window.confirm('Excluir este orçamento?')) excluirOrcamento(o.id).catch((error: any) => alert(error.message)); }} className="p-2 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-50"><Trash2 size={16} /></button></div>
                   </td>
                 </tr>
               ))}

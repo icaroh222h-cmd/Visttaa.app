@@ -1,5 +1,6 @@
 import React, { ErrorInfo, ReactNode } from 'react';
 import { AlertCircle } from 'lucide-react';
+import { captureException } from '../services/telemetry';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -19,6 +20,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('Erro de renderização do VISTTA:', error, info.componentStack);
+    captureException(error, { module: 'interface', action: 'renderizar_componente', operation: 'react_render', componentStack: info.componentStack });
   }
 
   private reload = () => {

@@ -4,7 +4,7 @@ import { ref, push, update, remove, onValue, query, limitToLast, orderByChild, s
 import { createUserWithEmailAndPassword, getAuth, onAuthStateChanged, sendPasswordResetEmail, signOut, User } from 'firebase/auth';
 import { db, auth, firebaseConfig } from '../config/firebase';
 import { Produto, Cliente, Venda, Caixa, CarrinhoItem, Orcamento, OrdemServico } from '../types';
-import { trackEvent } from '../services/telemetry';
+import { addBreadcrumb, captureFirebaseError, setModuleContext, setUserContext, trackEvent } from '../services/telemetry';
 
 const PLATFORM_OWNER_EMAIL = 'icaroprojetos7@gmail.com';
 
@@ -21,6 +21,30 @@ export const toList = <T,>(value: T[] | Record<string, T> | null | undefined): T
   if (value && typeof value === 'object') return Object.values(value);
   return [];
 };
+
+const pathToTab: Record<string, string> = {
+  '/': 'dashboard',
+  '/dashboard': 'dashboard',
+  '/vendas': 'vendas',
+  '/caixa': 'caixa',
+  '/estoque': 'estoque',
+  '/clientes': 'clientes',
+  '/orcamentos': 'orcamentos',
+  '/ordens': 'ordens',
+  '/financeiro': 'financeiro',
+  '/fornecedores': 'fornecedores',
+  '/contas': 'contas',
+  '/categorias': 'categorias',
+  '/usuarios': 'usuarios',
+  '/ajuda': 'ajuda',
+  '/admin': 'platform',
+  '/developer': 'platform'
+};
+
+const tabToPath = (tab: string) => tab === 'dashboard' ? '/' : tab === 'platform' ? '/admin' : `/${tab}`;
+const initialTab = () => pathToTab[window.location.pathname] || 'dashboard';
+const moduleForTab = (tab: string) => tab === 'vendas' ? 'pdv' : tab === 'platform' ? 'administracao' : tab;
+const actionForCollection = (prefix: string, collection: string) => `${prefix}_${collection.replace('ordensServico', 'ordem_servico')}`;
 
 interface AppContextType {
   user: User | null;
@@ -96,7 +120,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [dadosEmpresa, setDadosEmpresa] = useState<{ nome?: string } | null>(null);
   const [databaseError, setDatabaseError] = useState<string | null>(null);
   
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTabState] = useState(initialTab);
   const [pdvSearch, setPdvSearch] = useState('');
   const [carrinho, setCarrinho] = useState<CarrinhoItem[]>([]);
   
@@ -118,9 +142,67 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const vendaEmProcessamento = useRef(false);
   const perfilEmProvisionamento = useRef<string | null>(null);
 
+  const setActiveTab = (tab: string) => {
+    setActiveTabState(tab);
+    const nextPath = tabToPath(tab);
+    if (window.location.pathname !== nextPath) window.history.pushState({}, '', nextPath);
+  };
+
   const caixaAberto = useMemo(() => caixas.find(c => c.status === 'aberto'), [caixas]);
   const vendasDoCaixa = useMemo(() => caixaAberto ? vendas.filter(v => v.caixaId === caixaAberto.id) : [], [vendas, caixaAberto]);
   const totalVendasCaixa = useMemo(() => vendasDoCaixa.reduce((acc, v) => acc + (v.total || 0), 0), [vendasDoCaixa]);
+
+  useEffect(() => {
+    const handlePopState = () => setActiveTabState(pathToTab[window.location.pathname] || 'dashboard');
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  useEffect(() => {
+    const module = moduleForTab(activeTab);
+    setModuleContext(module);
+    addBreadcrumb('Página aberta', { module, route: window.location.pathname });
+  }, [activeTab]);
+
+  const pdvStorageKey = user && empresaId ? `vistta:pdv:${user.uid}:${empresaId}` : null;
+
+  useEffect(() => {
+    if (!pdvStorageKey) return;
+    try {
+      const saved = JSON.parse(localStorage.getItem(pdvStorageKey) || 'null');
+      if (!saved || !Array.isArray(saved.carrinho)) return;
+      setCarrinho(saved.carrinho);
+      setPdvSearch(typeof saved.pdvSearch === 'string' ? saved.pdvSearch : '');
+      setPdvCliente(typeof saved.pdvCliente === 'string' ? saved.pdvCliente : '');
+      setPdvDesconto(Number.isFinite(Number(saved.pdvDesconto)) ? Number(saved.pdvDesconto) : 0);
+      setPdvPagamento(typeof saved.pdvPagamento === 'string' ? saved.pdvPagamento : 'Pix');
+    } catch (error) {
+      console.warn('[PDV] Não foi possível restaurar a venda em andamento.', error);
+    }
+  }, [pdvStorageKey]);
+
+  useEffect(() => {
+    if (!pdvStorageKey) return;
+    try {
+      if (!carrinho.length) {
+        localStorage.removeItem(pdvStorageKey);
+        return;
+      }
+      localStorage.setItem(pdvStorageKey, JSON.stringify({ carrinho, pdvSearch, pdvCliente, pdvDesconto, pdvPagamento }));
+    } catch (error) {
+      console.warn('[PDV] Não foi possível salvar a venda em andamento.', error);
+    }
+  }, [pdvStorageKey, carrinho, pdvSearch, pdvCliente, pdvDesconto, pdvPagamento]);
+
+  useEffect(() => {
+    const warnBeforeLeaving = (event: BeforeUnloadEvent) => {
+      if (!carrinho.length || finalizandoVenda) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warnBeforeLeaving);
+    return () => window.removeEventListener('beforeunload', warnBeforeLeaving);
+  }, [carrinho.length, finalizandoVenda]);
 
   const requireEmpresa = () => {
     if (!user) throw new Error('Usuário não autenticado. Entre novamente.');
@@ -204,21 +286,17 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       profileHasNoEmpresa: !profile.empresaId
     };
     console.info('[EMPRESA] Verificando empresa', { path: companyPath, uid: user.uid, role: profile.role, empresaId: profile.empresaId || null, ruleChecks: companyRuleChecks });
-    try {
-      console.info('[EMPRESA] Criando empresa', { path: companyPath, criadoPor: user.uid });
-      await update(ref(db, companyPath), empresaInfo);
-      console.info('[EMPRESA] Criada', { path: companyPath });
-    } catch (error: any) {
-      console.error('[EMPRESA] Erro ao criar empresa', { path: companyPath, code: error?.code, message: error?.message, uid: user.uid, role: profile.role, empresaId: profile.empresaId || null });
-      reportDatabaseFailure('criar empresa', companyPath, error);
-    }
     const userPath = `users/${user.uid}`;
+    const profileUpdate = { empresaId: empresaRef.key, role: 'admin', status: 'active', email: user.email || '', updatedAt: new Date().toISOString() };
     try {
-      await update(ref(db, userPath), { empresaId: empresaRef.key, role: 'admin', status: 'active', email: user.email || '', updatedAt: new Date().toISOString() });
+      console.info('[EMPRESA] Criando empresa e vinculando perfil', { companyPath, userPath, criadoPor: user.uid });
+      await update(ref(db), { [companyPath]: empresaInfo, [userPath]: profileUpdate });
+      console.info('[EMPRESA] Ambiente criado', { path: companyPath, empresaId: empresaRef.key });
       void trackEvent('empresa_criada');
     } catch (error: any) {
-      console.error('[USER] Erro ao vincular empresa', { path: userPath, code: error?.code, message: error?.message, uid: user.uid });
-      reportDatabaseFailure('vincular perfil', userPath, error);
+      console.error('[EMPRESA] Erro ao criar ambiente', { companyPath, userPath, code: error?.code, message: error?.message, uid: user.uid });
+      captureFirebaseError(error, { module: 'autenticacao', action: 'configurar_empresa', operation: 'database_write' });
+      reportDatabaseFailure('criar ambiente', `${companyPath} e ${userPath}`, error);
     }
   };
 
@@ -246,17 +324,27 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const saveRecord = async (collection: string, data: Record<string, any>, id?: string) => {
     const empresa = requireEmpresa();
     const collectionPath = `empresas/${empresa}/${collection}`;
-    if (id) {
-      await update(ref(db, `${collectionPath}/${id}`), data);
-      return;
+    try {
+      if (id) {
+        await update(ref(db, `${collectionPath}/${id}`), data);
+        return;
+      }
+      const recordRef = push(ref(db, collectionPath));
+      await update(ref(db, `${collectionPath}/${recordRef.key}`), data);
+    } catch (error) {
+      captureFirebaseError(error, { module: moduleForTab(activeTab), action: actionForCollection(id ? 'editar' : 'criar', collection), operation: 'database_write' });
+      throw error;
     }
-    const recordRef = push(ref(db, collectionPath));
-    await update(ref(db, `${collectionPath}/${recordRef.key}`), data);
   };
 
   const deleteRecord = async (collection: string, id: string) => {
     const empresa = requireEmpresa();
-    await remove(ref(db, `empresas/${empresa}/${collection}/${id}`));
+    try {
+      await remove(ref(db, `empresas/${empresa}/${collection}/${id}`));
+    } catch (error) {
+      captureFirebaseError(error, { module: moduleForTab(activeTab), action: actionForCollection('excluir', collection), operation: 'database_delete' });
+      throw error;
+    }
   };
 
   // Autenticação e Perfis
@@ -280,6 +368,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       const sequence = ++authSequence;
       clearProfileListener();
       if (u) {
+        setUserContext({ id: u.uid });
+        addBreadcrumb('Sessão autenticada', { module: 'autenticacao', action: 'sessao_iniciada' });
         console.info('[AUTH] Firebase Auth retornou usuário', { uid: u.uid, email: u.email || null });
         setDatabaseError(null);
         profileTimeout = setTimeout(() => {
@@ -298,6 +388,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           claims = (await u.getIdTokenResult(true)).claims;
         } catch (error) {
           console.error('[Auth] Falha ao renovar claims do usuário:', { uid: u.uid, email: u.email, error });
+          captureFirebaseError(error, { module: 'autenticacao', action: 'renovar_claims', operation: 'auth_token' });
         }
         const isDeveloper = claims.role === 'developer' && claims.platformOwner === true;
         const isOwnerAccount = u.email?.trim().toLowerCase() === PLATFORM_OWNER_EMAIL;
@@ -341,6 +432,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             message: error?.message
           });
           console.error('[USER] Erro ao ler/criar perfil', { path: `users/${u.uid}`, code: error?.code, message: error?.message, uid: u.uid, email: u.email || null });
+          captureFirebaseError(error, { module: 'autenticacao', action: 'carregar_perfil', operation: 'database_read' });
           setDatabaseError(`Não foi possível criar o perfil do usuário. Código: ${error?.code || 'unknown'}. ${error?.message || ''}`);
           clearProfileTimeout();
           setUser(u);
@@ -365,6 +457,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
                   setDadosEmpresa(companySnapshot.exists() ? companySnapshot.val() : null);
                 } catch (error: any) {
                   console.error('[EMPRESA] Erro ao carregar empresa', { path: `empresas/${data.empresaId}/info`, code: error?.code, message: error?.message, empresaId: data.empresaId, uid: u.uid });
+                  captureFirebaseError(error, { module: 'autenticacao', action: 'carregar_empresa', operation: 'database_read' });
                   setDatabaseError(`Não foi possível carregar a empresa. Código: ${error?.code || 'unknown'}. ${error?.message || ''}`);
                 }
             } else {
@@ -379,6 +472,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           },
           (error: any) => {
             console.error('[USER] Erro no listener do perfil', { path: `users/${u.uid}`, code: error?.code, message: error?.message, uid: u.uid });
+            captureFirebaseError(error, { module: 'autenticacao', action: 'escutar_perfil', operation: 'database_listener' });
             setEmpresaId(null);
             setUserRole(null);
             setDadosEmpresa(null);
@@ -389,6 +483,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           }
         );
       } else {
+        setUserContext(null);
         perfilEmProvisionamento.current = null;
         setDeveloperClaimsPending(false);
         setUser(null);
@@ -447,6 +542,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         col.setter(data);
       }, (error) => {
         console.error(`Erro ao carregar ${col.name}:`, error);
+        captureFirebaseError(error, { module: moduleForTab(activeTab), action: `carregar_${col.name}`, operation: 'database_listener' });
         setDatabaseError(`Não foi possível carregar ${col.name}. Verifique as regras do Firebase.`);
       });
     });
@@ -594,6 +690,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       [usersSnapshot, companiesSnapshot] = await Promise.all([get(ref(db, 'users')), get(ref(db, 'empresas'))]);
     } catch (error: any) {
       console.error('[Platform Dashboard] Leitura global recusada:', { operation: 'get', paths: ['/users', '/empresas'], uid: user?.uid, role: 'developer', empresaId: null, code: error?.code, message: error?.message });
+      captureFirebaseError(error, { module: 'administracao', action: 'carregar_visao_geral', operation: 'database_read' });
       throw new Error(`Permission denied ao carregar /users e /empresas. Código: ${error?.code || 'unknown'}. ${error?.message || ''}`);
     }
     const users = usersSnapshot.val() && typeof usersSnapshot.val() === 'object' ? Object.entries(usersSnapshot.val() as Record<string, any>) : [];
@@ -618,6 +715,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       [companiesSnapshot, usersSnapshot] = await Promise.all([get(ref(db, 'empresas')), get(ref(db, 'users'))]);
     } catch (error: any) {
       console.error('[Platform Dashboard] Leitura global de empresas recusada:', { operation: 'get', paths: ['/empresas', '/users'], uid: user?.uid, role: 'developer', empresaId: null, code: error?.code, message: error?.message });
+      captureFirebaseError(error, { module: 'administracao', action: 'listar_empresas', operation: 'database_read' });
       throw new Error(`Permission denied ao carregar /empresas e /users. Código: ${error?.code || 'unknown'}. ${error?.message || ''}`);
     }
     const companies = companiesSnapshot.val() && typeof companiesSnapshot.val() === 'object' ? companiesSnapshot.val() as Record<string, any> : {};
@@ -706,6 +804,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       setCarrinho([]); setPdvDesconto(0); setPdvCliente('');
       alert(comoOrcamento ? "Orçamento salvo!" : "Venda concluída com sucesso!");
     } catch (e: any) {
+      captureFirebaseError(e, { module: 'pdv', action: comoOrcamento ? 'salvar_orcamento' : 'finalizar_venda', operation: 'database_write' });
       alert("Erro ao finalizar: " + e.message);
     } finally {
       vendaEmProcessamento.current = false;

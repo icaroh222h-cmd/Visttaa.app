@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-export function GenericForm({ config, initialData, onSave, onClose }: any) {
+export function GenericForm({ config, initialData, onSave, onClose, onDirtyChange }: any) {
   const [form, setForm] = useState(initialData || config.defaultData);
   const [submitError, setSubmitError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -19,7 +19,7 @@ export function GenericForm({ config, initialData, onSave, onClose }: any) {
   };
 
   return (
-    <form onSubmit={submit}>
+    <form onSubmit={submit} onInput={() => onDirtyChange?.(true)}>
       <div className="space-y-4 mb-6">
         {config.fields.map((f: any) => (
           <div key={f.name}>

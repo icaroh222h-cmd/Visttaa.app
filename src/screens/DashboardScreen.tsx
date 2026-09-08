@@ -3,8 +3,15 @@ import { Boxes, TrendingUp, Users, AlertTriangle, ShoppingCart, ArrowUpRight, Fi
 import { useAppContext, formatMoney } from '../context/AppContext';
 import { ActionCard, DashCard, ScreenHeader } from '../components/SharedUI';
 
+const localDateKey = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export function DashboardScreen() {
-  const { produtos, vendas, clientes, orcamentos, ordensServico, caixaAberto, setActiveTab } = useAppContext();
+  const { produtos, vendas, clientes, orcamentos, ordensServico, caixaAberto, setActiveTab, user } = useAppContext();
   const estoqueTotal = produtos.reduce((acc, p) => acc + Number(p.qtd || 0), 0);
   const vendasTotal = vendas.reduce((acc, v) => acc + Number(v.total || 0), 0);
   const estoqueCritico = produtos.filter(p => Number(p.qtd) < Number(p.min)).length;
@@ -13,7 +20,7 @@ export function DashboardScreen() {
   const salesByDay = vendas.reduce<Record<string, number>>((acc, venda) => {
     const date = new Date(venda.data);
     if (Number.isNaN(date.getTime())) return acc;
-    const key = date.toISOString().slice(0, 10);
+    const key = localDateKey(date);
     acc[key] = (acc[key] || 0) + Number(venda.total || 0);
     return acc;
   }, {});
@@ -21,17 +28,20 @@ export function DashboardScreen() {
     const date = new Date();
     date.setHours(0, 0, 0, 0);
     date.setDate(date.getDate() - (6 - index));
-    const key = date.toISOString().slice(0, 10);
+    const key = localDateKey(date);
     return [date.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', ''), salesByDay[key] || 0] as [string, number];
   });
   const chartMax = Math.max(...chartEntries.map(([, value]) => value), 1);
   const chartPoints = chartEntries.length > 1
     ? chartEntries.map(([, value], index) => `${(index / (chartEntries.length - 1)) * 100},${100 - (value / chartMax) * 78}`).join(' ')
     : '';
+  const currentHour = new Date().getHours();
+  const greeting = currentHour < 12 ? 'Bom dia' : currentHour < 18 ? 'Boa tarde' : 'Boa noite';
+  const displayName = user?.displayName || user?.email?.split('@')[0] || '';
   
   return (
     <div className="flex flex-col h-full max-w-[1500px] mx-auto vistta-enter">
-      <ScreenHeader eyebrow="Visão operacional" title="Bom dia, vamos cuidar da ótica." description="O essencial da operação, organizado para uma decisão rápida." action={<div className={`inline-flex self-start items-center gap-2 rounded-full px-3 py-2 text-xs font-bold ${caixaAberto ? 'bg-[#ecf8d9] text-[#476e17]' : 'bg-[#f3edf7] text-[#765d82]'}`}>
+      <ScreenHeader eyebrow="Visão operacional" title={`${greeting}${displayName ? `, ${displayName}` : ''}.`} description="O essencial da operação, organizado para uma decisão rápida." action={<div className={`inline-flex self-start items-center gap-2 rounded-full px-3 py-2 text-xs font-bold ${caixaAberto ? 'bg-[#ecf8d9] text-[#476e17]' : 'bg-[#f3edf7] text-[#765d82]'}`}>
           <span className={`w-2 h-2 rounded-full ${caixaAberto ? 'bg-[#81b52c]' : 'bg-[#aa8fb8]'}`} /> Caixa {caixaAberto ? 'aberto' : 'fechado'}
         </div>} />
 

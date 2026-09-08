@@ -10,9 +10,22 @@ export function EstoqueScreen() {
   const [searchTerm, setSearchTerm] = useState('');
   const [produtoEditando, setProdutoEditando] = useState<Produto | null>(null);
   const [modalAberto, setModalAberto] = useState(false);
+  const [formDirty, setFormDirty] = useState(false);
+
+  const fecharModal = () => {
+    if (formDirty && !window.confirm('Você possui alterações não salvas. Deseja descartar?')) return;
+    setFormDirty(false);
+    setModalAberto(false);
+    setProdutoEditando(null);
+  };
+  const produtosFiltrados = produtos.filter(p => {
+    const query = searchTerm.trim().toLowerCase();
+    return !query || [p.codigo, p.marca, p.modelo, p.categoria, p.fornecedorId].some(value => String(value || '').toLowerCase().includes(query));
+  });
 
   const salvar = async (data: Partial<Produto>) => {
     await salvarProduto(data, produtoEditando?.id);
+    setFormDirty(false);
     setModalAberto(false);
     setProdutoEditando(null);
   };
@@ -47,7 +60,7 @@ export function EstoqueScreen() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {produtos.filter(p => p.codigo?.toLowerCase().includes(searchTerm.toLowerCase()) || p.marca?.toLowerCase().includes(searchTerm.toLowerCase())).map((p: Produto) => (
+              {produtosFiltrados.map((p: Produto) => (
                 <tr key={p.id} className="hover:bg-slate-50 transition-colors">
                   <td className="py-4 px-6 font-mono text-[12px] font-bold text-slate-400">{p.codigo}</td>
                   <td className="py-4 px-6">
@@ -59,17 +72,18 @@ export function EstoqueScreen() {
                     <span className={`inline-flex items-center justify-center w-10 h-10 rounded-xl text-[14px] font-bold ${Number(p.qtd) < Number(p.min) ? 'bg-rose-50 text-rose-600' : 'bg-slate-50 text-slate-700'}`}>{p.qtd}</span>
                   </td>
                   <td className="py-4 px-6 text-center">
-                    <button onClick={() => { setProdutoEditando(p); setModalAberto(true); }} className="p-2 rounded-xl text-slate-400 hover:text-[var(--vistta-violet)] hover:bg-[var(--vistta-lavender)]"><Edit2 size={16} /></button>
+                    <button aria-label={`Editar produto ${p.marca} ${p.modelo}`} onClick={() => { setProdutoEditando(p); setModalAberto(true); }} className="p-2 rounded-xl text-slate-400 hover:text-[var(--vistta-violet)] hover:bg-[var(--vistta-lavender)]"><Edit2 size={16} /></button>
                     <button aria-label={`Excluir produto ${p.marca} ${p.modelo}`} onClick={() => { if (window.confirm(`Excluir o produto ${p.marca} ${p.modelo}?`)) excluirProduto(p.id).catch((error: any) => alert(error.message)); }} className="p-2 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-50"><Trash2 size={16} /></button>
                   </td>
                 </tr>
               ))}
+              {!produtosFiltrados.length && <tr><td colSpan={6} className="py-12 text-center text-sm text-slate-400">{produtos.length ? 'Nenhum produto encontrado.' : 'Nenhum produto cadastrado ainda.'}</td></tr>}
             </tbody>
           </table>
         </div>
       </div>
-      <ModalBase open={modalAberto} onClose={() => { setModalAberto(false); setProdutoEditando(null); }} title={produtoEditando ? 'Editar Produto' : 'Novo Produto'} width="max-w-3xl">
-        <FormProduto data={produtoEditando} fornecedores={fornecedores} onSave={salvar} onClose={() => { setModalAberto(false); setProdutoEditando(null); }} />
+      <ModalBase open={modalAberto} onClose={fecharModal} title={produtoEditando ? 'Editar Produto' : 'Novo Produto'} width="max-w-3xl">
+        <FormProduto data={produtoEditando} fornecedores={fornecedores} onSave={salvar} onDirtyChange={setFormDirty} onClose={fecharModal} />
       </ModalBase>
     </div>
   );

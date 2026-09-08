@@ -8,6 +8,14 @@ export function CadastrosGenericosScreen({ activeTab }: { activeTab: string }) {
   const { fornecedores, contas, categorias, usuarios, salvarCadastro, excluirCadastro } = useAppContext();
   const [itemEditando, setItemEditando] = React.useState<any | null>(null);
   const [modalAberto, setModalAberto] = React.useState(false);
+  const [formDirty, setFormDirty] = React.useState(false);
+
+  const fecharModal = () => {
+    if (formDirty && !window.confirm('Você possui alterações não salvas. Deseja descartar?')) return;
+    setFormDirty(false);
+    setModalAberto(false);
+    setItemEditando(null);
+  };
   
   const getCollectionData = () => {
     switch(activeTab) {
@@ -67,6 +75,7 @@ export function CadastrosGenericosScreen({ activeTab }: { activeTab: string }) {
   const titles: Record<string, string> = { fornecedores: 'Fornecedores', contas: 'Contas', categorias: 'Categorias', usuarios: 'Usuários' };
   const salvar = async (item: any) => {
     await salvarCadastro(collection, item, itemEditando?.id);
+    setFormDirty(false);
     setModalAberto(false);
     setItemEditando(null);
   };
@@ -109,8 +118,8 @@ export function CadastrosGenericosScreen({ activeTab }: { activeTab: string }) {
             </table>
         </div>
       </div>
-      <ModalBase open={modalAberto} onClose={() => { setModalAberto(false); setItemEditando(null); }} title={itemEditando ? `Editar ${activeTab}` : `Novo ${activeTab}`}>
-        <GenericForm config={config} initialData={itemEditando} onSave={salvar} onClose={() => { setModalAberto(false); setItemEditando(null); }} />
+      <ModalBase open={modalAberto} onClose={fecharModal} title={itemEditando ? `Editar ${activeTab}` : `Novo ${activeTab}`}>
+        <GenericForm config={config} initialData={itemEditando} onSave={salvar} onDirtyChange={setFormDirty} onClose={fecharModal} />
       </ModalBase>
     </div>
   );

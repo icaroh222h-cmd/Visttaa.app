@@ -4,6 +4,7 @@ node_modules
 .env
 .env.*
 !.env.example
+.sentryclirc
 dist
 functions/lib
 .firebase/

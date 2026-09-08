@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, sendPasswordResetEmail, verifyPasswordResetCode, confirmPasswordReset } from 'firebase/auth';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, sendPasswordResetEmail, verifyPasswordResetCode, confirmPasswordReset } from 'firebase/auth';
 import { ref, update } from 'firebase/database';
 import { auth, db } from '../config/firebase';
-import { trackEvent } from '../services/telemetry';
+import { captureFirebaseError, trackEvent } from '../services/telemetry';
 import { Mail, Lock, EyeOff, Eye, Store, Package, BarChart3, ShieldCheck, Instagram, Linkedin, ArrowUpRight, CheckCircle2 } from 'lucide-react';
 import { CreatorLogo, FeedbackAlert, LogoVistta, ModalBase } from '../components/SharedUI';
 
@@ -30,8 +30,16 @@ export function AuthScreen() {
     verifyPasswordResetCode(auth, code).then(email => {
       setAuthEmail(email);
     }).catch(() => {
+      captureFirebaseError(new Error('Link de recuperação inválido ou expirado.'), { module: 'autenticacao', action: 'validar_recuperacao', operation: 'auth_password_reset' });
       setAuthError('Este link de recuperação expirou ou é inválido. Solicite um novo link.');
       setResetCode('');
+    });
+  }, []);
+
+  useEffect(() => {
+    void getRedirectResult(auth).catch(error => {
+      captureFirebaseError(error, { module: 'autenticacao', action: 'login_google_redirect', operation: 'auth_sign_in' });
+      setAuthError(getGoogleErrorMessage(error));
     });
   }, []);
 
@@ -67,6 +75,7 @@ export function AuthScreen() {
         }
       }
     } catch (error: any) {
+      captureFirebaseError(error, { module: 'autenticacao', action: authMode === 'login' ? 'login' : 'criar_conta', operation: 'auth_sign_in' });
       if (error?.code === 'auth/email-already-in-use') {
         setAccountExists(true);
         setAuthError('Este e-mail já possui uma conta. Entre com sua conta existente ou recupere sua senha.');
@@ -97,7 +106,12 @@ export function AuthScreen() {
       console.info('[AUTH] Email recebido', { email: result.user.email || null });
       void trackEvent('login_google');
     } catch (error: any) {
+      if (error?.code === 'auth/popup-blocked') {
+        await signInWithRedirect(auth, provider);
+        return;
+      }
       console.error('[AUTH] Erro no popup Google', { code: error?.code, message: error?.message });
+      captureFirebaseError(error, { module: 'autenticacao', action: 'login_google', operation: 'auth_sign_in' });
       setAuthError(getGoogleErrorMessage(error));
       setIsLoggingIn(false);
     }
@@ -116,6 +130,7 @@ export function AuthScreen() {
       await sendPasswordResetEmail(auth, email);
       setResetFeedback('Se houver uma conta associada a este e-mail, enviaremos as instruções para recuperação. Verifique também a pasta de spam.');
     } catch (error: any) {
+      captureFirebaseError(error, { module: 'autenticacao', action: 'recuperar_senha', operation: 'auth_password_reset' });
       setResetFeedback(error?.code === 'auth/network-request-failed'
         ? 'Não foi possível concluir a operação. Verifique sua conexão e tente novamente.'
         : 'Se houver uma conta associada a este e-mail, enviaremos as instruções para recuperação. Verifique também a pasta de spam.');
@@ -149,6 +164,7 @@ export function AuthScreen() {
       setAuthMode('login');
       setResetFeedback('Senha redefinida com sucesso. Entre com sua nova senha.');
     } catch (error: any) {
+      captureFirebaseError(error, { module: 'autenticacao', action: 'redefinir_senha', operation: 'auth_password_reset' });
       setAuthError(error?.code === 'auth/expired-action-code' || error?.code === 'auth/invalid-action-code'
         ? 'Este link de recuperação expirou ou já foi utilizado. Solicite um novo link.'
         : 'Não foi possível redefinir a senha. Tente solicitar um novo link.');
@@ -174,7 +190,7 @@ export function AuthScreen() {
     if (error?.code === 'auth/invalid-api-key' || errorMessage.includes('api_key_http_referrer_blocked') || errorMessage.includes('requests from referer')) {
       return 'A API key do Firebase bloqueou este domínio. No Google Cloud Console, abra APIs e serviços > Credenciais, edite a chave do projeto vistta-2e1df e autorize o domínio atual. Depois, publique o build novamente.';
     }
-    if (error?.code === 'auth/popup-blocked') return 'O pop-up foi bloqueado. O login será redirecionado.';
+    if (error?.code === 'auth/popup-blocked') return 'O pop-up foi bloqueado. Tente novamente para continuar pelo redirecionamento.';
     if (error?.code === 'auth/popup-closed-by-user') return 'O login do Google foi cancelado.';
     if (error?.code === 'auth/operation-not-allowed') return 'O provedor Google não está ativado no Firebase Authentication.';
     if (error?.code === 'auth/account-exists-with-different-credential') return 'Este e-mail já está vinculado a outro método de acesso. Entre usando o método original ou recupere sua senha.';

@@ -1,7 +1,7 @@
 import React from 'react';
 import { ModalBase, ScreenHeader } from '../components/SharedUI';
 import { FormCliente } from '../components/Forms/FormCliente';
-import { Plus, Edit2, Trash2 } from 'lucide-react';
+import { Plus, Edit2, Search, Trash2 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { Cliente } from '../types';
 
@@ -9,9 +9,24 @@ export function ClientesScreen() {
   const { clientes, salvarCliente, excluirCliente, vendas, ordensServico } = useAppContext();
   const [clienteEditando, setClienteEditando] = React.useState<Cliente | null>(null);
   const [modalAberto, setModalAberto] = React.useState(false);
+  const [searchTerm, setSearchTerm] = React.useState('');
+  const [formDirty, setFormDirty] = React.useState(false);
+
+  const fecharModal = () => {
+    if (formDirty && !window.confirm('Você possui alterações não salvas. Deseja descartar?')) return;
+    setFormDirty(false);
+    setModalAberto(false);
+    setClienteEditando(null);
+  };
+  const clientesFiltrados = clientes.filter(cliente => {
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) return true;
+    return [cliente.nome, cliente.cpf, cliente.tel, cliente.email].some(value => String(value || '').toLowerCase().includes(query));
+  });
 
   const salvar = async (data: Partial<Cliente>) => {
     await salvarCliente(data, clienteEditando?.id);
+    setFormDirty(false);
     setModalAberto(false);
     setClienteEditando(null);
   };
@@ -23,6 +38,7 @@ export function ClientesScreen() {
         </button>} />
 
       <div className="bg-white rounded-3xl border border-slate-100 shadow-sm flex-1 flex flex-col overflow-hidden min-h-[400px]">
+        <div className="border-b border-slate-100 p-4"><div className="relative max-w-md"><Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input type="search" aria-label="Buscar clientes" placeholder="Buscar nome, CPF, telefone ou e-mail..." value={searchTerm} onChange={event => setSearchTerm(event.target.value)} className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-12 pr-4 outline-none focus:border-[var(--vistta-violet)]" /></div></div>
         <div className="flex-1 overflow-auto custom-scrollbar p-2">
           <table className="w-full text-left min-w-[700px]">
             <thead>
@@ -34,7 +50,7 @@ export function ClientesScreen() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {clientes.map((c: Cliente) => (
+              {clientesFiltrados.map((c: Cliente) => (
                 <tr key={c.id} className="hover:bg-slate-50 transition-colors">
                   <td className="py-4 px-6">
                     <div className="font-bold text-[14px]">{c.nome}</div>
@@ -46,18 +62,19 @@ export function ClientesScreen() {
                   </td>
                   <td className="py-4 px-6 text-center">
                     <div className="flex justify-center gap-2">
-                       <button onClick={() => { setClienteEditando(c); setModalAberto(true); }} className="p-2 rounded-xl text-slate-400 hover:text-[var(--vistta-violet)] hover:bg-[var(--vistta-lavender)]"><Edit2 size={16} /></button>
+                       <button aria-label={`Editar cliente ${c.nome}`} onClick={() => { setClienteEditando(c); setModalAberto(true); }} className="p-2 rounded-xl text-slate-400 hover:text-[var(--vistta-violet)] hover:bg-[var(--vistta-lavender)]"><Edit2 size={16} /></button>
                        <button aria-label={`Excluir cliente ${c.nome}`} onClick={() => { if (window.confirm(`Excluir o cliente ${c.nome}?`)) excluirCliente(c.id).catch((error: any) => alert(error.message)); }} className="p-2 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-50"><Trash2 size={16} /></button>
                     </div>
                   </td>
                 </tr>
               ))}
+              {!clientesFiltrados.length && <tr><td colSpan={4} className="py-12 text-center text-sm text-slate-400">{clientes.length ? 'Nenhum cliente encontrado.' : 'Nenhum cliente cadastrado ainda.'}</td></tr>}
             </tbody>
           </table>
         </div>
       </div>
-      <ModalBase open={modalAberto} onClose={() => { setModalAberto(false); setClienteEditando(null); }} title={clienteEditando ? 'Editar Cliente' : 'Novo Cliente'} width="max-w-4xl">
-        <FormCliente data={clienteEditando} onSave={salvar} onClose={() => { setModalAberto(false); setClienteEditando(null); }} />
+      <ModalBase open={modalAberto} onClose={fecharModal} title={clienteEditando ? 'Editar Cliente' : 'Novo Cliente'} width="max-w-4xl">
+        <FormCliente data={clienteEditando} onSave={salvar} onDirtyChange={setFormDirty} onClose={fecharModal} />
       </ModalBase>
     </div>
   );

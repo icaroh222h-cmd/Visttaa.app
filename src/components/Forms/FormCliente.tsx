@@ -6,9 +6,10 @@ interface FormClienteProps {
   data: Cliente | null;
   onSave: (data: any) => void;
   onClose: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
-export function FormCliente({ data, onSave, onClose }: FormClienteProps) {
+export function FormCliente({ data, onSave, onClose, onDirtyChange }: FormClienteProps) {
   const medidaVazia = (): MedidaOtica => ({ esf: '', cil: '', eixo: '', dnp: '', add: '', altura: '' });
   const receitaVazia = (): Prescricao => ({ medico: '', crm: '', dataReceita: '', obs: '', od: medidaVazia(), oe: medidaVazia(), longe: { od: medidaVazia(), oe: medidaVazia() }, perto: { od: medidaVazia(), oe: medidaVazia() } });
   const clienteVazio = () => ({ nome: '', cpf: '', tel: '', nasc: '', email: '', endereco: { cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', estado: '' }, prescricao: receitaVazia() });
@@ -37,7 +38,7 @@ export function FormCliente({ data, onSave, onClose }: FormClienteProps) {
   };
 
   return (
-    <form onSubmit={submit} className="flex flex-col">
+    <form onSubmit={submit} onInput={() => onDirtyChange?.(true)} className="flex flex-col">
       <div className="space-y-6">
         <div>
           <h3 className="text-[13px] font-bold text-indigo-500 uppercase mb-4 flex items-center gap-2"><Users size={16}/> Dados Pessoais</h3>

@@ -1,7 +1,19 @@
 import React, { Suspense } from 'react'
 import ReactDOM from 'react-dom/client'
+import * as Sentry from '@sentry/react'
 import './index.css'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { GlitchTipTestHarness } from './components/GlitchTipTestHarness'
+import { registerGlitchTipTestHooks, sanitizeSentryEvent } from './services/telemetry'
+
+Sentry.init({
+  dsn: 'https://0ff0dfb7a2da424682bd3420028b6433@app.glitchtip.com/27643',
+  release: import.meta.env.VITE_APP_RELEASE,
+  environment: import.meta.env.VITE_APP_ENVIRONMENT,
+  beforeSend: sanitizeSentryEvent,
+  tracesSampleRate: 0.01,
+});
+registerGlitchTipTestHooks();
 
 const requiredFirebaseVariables = [
   'VITE_FIREBASE_API_KEY',
@@ -49,7 +61,10 @@ document.documentElement.classList.toggle('dark', savedTheme === 'dark')
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
     <ErrorBoundary>
-      {App ? <Suspense fallback={<AppLoading />}><App /></Suspense> : <MissingFirebaseConfig />}
+      <Sentry.ErrorBoundary fallback={<p>Não foi possível carregar esta tela. Recarregue a aplicação e tente novamente.</p>}>
+        {App ? <Suspense fallback={<AppLoading />}><App /></Suspense> : <MissingFirebaseConfig />}
+        {import.meta.env.VITE_APP_ENVIRONMENT !== 'production' && <GlitchTipTestHarness />}
+      </Sentry.ErrorBoundary>
     </ErrorBoundary>
   </React.StrictMode>,
 )

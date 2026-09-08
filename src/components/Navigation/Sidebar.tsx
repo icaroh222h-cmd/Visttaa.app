@@ -29,7 +29,7 @@ export function Sidebar() {
           {!collapsed && <div className="ml-3 min-w-0"><div className="font-display font-bold tracking-[.18em] text-[17px]">VISTTA</div><div className="text-[10px] text-white/45 truncate mt-1" title={dadosEmpresa?.nome}>{dadosEmpresa?.nome || 'Minha Ótica'}</div></div>}
         </div>
       </div>
-      <button onClick={() => setCollapsed(!collapsed)} className="absolute top-[72px] -right-3 h-6 w-6 rounded-full bg-[#c6ed76] text-[#30204d] text-xs font-bold shadow-lg">{collapsed ? '›' : '‹'}</button>
+      <button aria-label={collapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'} aria-expanded={!collapsed} onClick={() => setCollapsed(!collapsed)} className="absolute top-[72px] -right-3 h-6 w-6 rounded-full bg-[#c6ed76] text-[#30204d] text-xs font-bold shadow-lg">{collapsed ? '›' : '‹'}</button>
       
       <div className={`flex-1 overflow-y-auto py-6 ${collapsed ? 'px-3' : 'px-4'} space-y-1 custom-scrollbar`}>
         <SidebarItem icon={Home} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} collapsed={collapsed} />

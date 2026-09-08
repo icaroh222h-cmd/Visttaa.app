@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-export function FormProduto({ data, onSave, onClose, fornecedores = [] }: any) {
+export function FormProduto({ data, onSave, onClose, onDirtyChange, fornecedores = [] }: any) {
   const [form, setForm] = useState(data || {
     codigo: '', categoria: 'Armações', marca: '', modelo: '', cor: '', tamanho: '', material: '', fornecedorId: '', tratamento: '',
     custo: '', venda: '', qtd: '', min: ''
@@ -18,7 +18,7 @@ export function FormProduto({ data, onSave, onClose, fornecedores = [] }: any) {
   };
 
   return (
-    <form onSubmit={submit}>
+    <form onSubmit={submit} onInput={() => onDirtyChange?.(true)}>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <div><label className={labelClass}>SKU (Cód)</label><input required value={form.codigo} onChange={e=>h('codigo', e.target.value)} className={inputClass} /></div>
         <div className="sm:col-span-2">
