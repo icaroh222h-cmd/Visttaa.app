@@ -1,13 +1,18 @@
 import { initializeApp } from 'firebase-admin/app';
 import { getAuth as getAdminAuth } from 'firebase-admin/auth';
 import { getDatabase, ServerValue } from 'firebase-admin/database';
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onCall, onRequest, HttpsError, type Request } from 'firebase-functions/v2/https';
+import { defineSecret } from 'firebase-functions/params';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 
 initializeApp();
 
 const database = getDatabase();
 const adminAuth = getAdminAuth();
 const PROCESSING_TIMEOUT_MS = 5 * 60 * 1000;
+const glitchtipWebhookSecret = defineSecret('GLITCHTIP_WEBHOOK_SECRET');
+const githubDispatchToken = defineSecret('GITHUB_DISPATCH_TOKEN');
+const githubRepository = defineSecret('GITHUB_REPOSITORY');
 
 type UserProfile = { empresaId?: string; role?: string };
 type SaleItem = { id: string; qtd: number; venda: number; custo: number; codigo?: string; marca?: string; modelo?: string };
@@ -219,6 +224,57 @@ export const addCashEntry = onCall(async request => {
   const entryRef = database.ref(`empresas/${empresaId}/caixas/${caixaId}/lancamentos`).push();
   await entryRef.set({ tipo, descricao, valor, data: new Date().toISOString(), operador: uid });
   return { entryId: entryRef.key };
+});
+
+function isSafeWebhookValue(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= 100;
+}
+
+function webhookIsAuthorized(request: Request, expected: string): boolean {
+  const provided = String(request.get('x-vistta-webhook-signature') || '');
+  if (!expected || !provided) return false;
+  const body = request.rawBody || JSON.stringify(request.body || {});
+  const expectedDigest = createHmac('sha256', expected).update(body).digest('hex');
+  const expectedBuffer = Buffer.from(expectedDigest);
+  const providedBuffer = Buffer.from(provided);
+  return expectedBuffer.length === providedBuffer.length && timingSafeEqual(expectedBuffer, providedBuffer);
+}
+
+export const glitchtipIssueWebhook = onRequest({ cors: false, secrets: [glitchtipWebhookSecret, githubDispatchToken, githubRepository] }, async (request, response) => {
+  if (request.method !== 'POST' || !webhookIsAuthorized(request, glitchtipWebhookSecret.value())) {
+    response.status(401).json({ error: 'unauthorized' });
+    return;
+  }
+  const payload = request.body || {};
+  const issueId = payload.issue_id || payload.issueId;
+  const release = payload.release;
+  const environment = payload.environment;
+  if (!isSafeWebhookValue(issueId) || !isSafeWebhookValue(release) || !isSafeWebhookValue(environment)) {
+    response.status(400).json({ error: 'issue_id, release and environment are required' });
+    return;
+  }
+  const dispatchToken = githubDispatchToken.value();
+  const repository = githubRepository.value();
+  if (!dispatchToken || !repository || !/^[^/]+\/[^/]+$/.test(repository)) {
+    response.status(503).json({ error: 'automation is not configured' });
+    return;
+  }
+  const dispatchResponse = await fetch(`https://api.github.com/repos/${repository}/dispatches`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/vnd.github+json',
+      Authorization: `Bearer ${dispatchToken}`,
+      'Content-Type': 'application/json',
+      'X-GitHub-Api-Version': '2022-11-28'
+    },
+    body: JSON.stringify({ event_type: 'glitchtip-issue', client_payload: { issue_id: issueId, release, environment } })
+  });
+  if (!dispatchResponse.ok) {
+    console.error('GitHub dispatch failed', { status: dispatchResponse.status });
+    response.status(502).json({ error: 'automation dispatch failed' });
+    return;
+  }
+  response.status(202).json({ accepted: true });
 });
 
 export const getPlatformOverview = onCall(async request => {

@@ -5,6 +5,7 @@ node_modules
 .env.*
 !.env.example
 .sentryclirc
+automation/artifacts
 dist
 functions/lib
 .firebase/

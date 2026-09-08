@@ -7,6 +7,8 @@
     "dev": "vite",
     "typecheck": "tsc --noEmit",
     "build": "tsc && vite build",
+    "validate": "npm run typecheck && npm run build && npm run validate:sourcemaps",
+    "validate:sourcemaps": "find dist -type f -name '*.map' -print -quit | grep -q .",
     "build:functions": "npm run build --prefix functions",
     "build:all": "npm run build:functions && npm run build",
     "upload:sourcemaps": "npx @sentry/cli sourcemaps upload ./dist --org vistta-erp --project vistta-erp --release $npm_package_name@$npm_package_version",

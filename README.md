@@ -111,7 +111,7 @@ A documentação técnica, operacional, de segurança e o relatório de auditori
 
 ## Estado atual e limitações conhecidas
 
-- Não há suíte automatizada no repositório; o build TypeScript/Vite é a validação automatizada disponível.
-- Firebase Auth e Realtime Database precisam estar configurados antes do uso.
-- Venda, estoque e caixa ainda devem ser movidos para uma operação server-side idempotente antes de um cenário de alta concorrência.
-- A auditoria de dependências deve ser executada periodicamente com `npm audit`; vulnerabilidades transitivas atuais podem exigir atualização coordenada do Firebase.
+
+## Automação de correções
+
+O CI e o fluxo controlado de propostas para Issues do GlitchTip estão documentados em [`docs/AUTOMATION.md`](docs/AUTOMATION.md). A automação trabalha em branch isolada, exige typecheck/build, cria apenas PR draft e não faz deploy automaticamente.

@@ -261,7 +261,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       throw new Error('Perfil do usuário não está em estado de administrador para criar uma empresa.');
     }
     if (profile.empresaId) {
-      throw new Error('Este usuário já está vinculado a uma empresa.');
+      setEmpresaId(profile.empresaId);
+      return;
     }
 
     const empresaRef = push(ref(db, 'empresas'));
@@ -289,8 +290,11 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     const userPath = `users/${user.uid}`;
     const profileUpdate = { empresaId: empresaRef.key, role: 'admin', status: 'active', email: user.email || '', updatedAt: new Date().toISOString() };
     try {
-      console.info('[EMPRESA] Criando empresa e vinculando perfil', { companyPath, userPath, criadoPor: user.uid });
-      await update(ref(db), { [companyPath]: empresaInfo, [userPath]: profileUpdate });
+      console.info('[EMPRESA] Criando empresa', { companyPath, criadoPor: user.uid });
+      // As regras precisam validar a empresa já existente antes de autorizar o vínculo do perfil.
+      await set(ref(db, companyPath), empresaInfo);
+      console.info('[EMPRESA] Vinculando perfil', { userPath, empresaId: empresaRef.key });
+      await update(ref(db, userPath), profileUpdate);
       console.info('[EMPRESA] Ambiente criado', { path: companyPath, empresaId: empresaRef.key });
       void trackEvent('empresa_criada');
     } catch (error: any) {
@@ -504,7 +508,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   // Listeners das Coleções no Banco de Dados
   useEffect(() => {
-    if (!empresaId) return;
+    if (!empresaId || !dadosEmpresa) return;
     const basePath = `empresas/${empresaId}`;
     const inicioMes = new Date();
     inicioMes.setDate(1);
@@ -548,7 +552,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     });
 
     return () => unsubs.forEach(u => u());
-  }, [empresaId, userRole]);
+  }, [empresaId, userRole, dadosEmpresa]);
 
   // Funções do PDV
   const addToCart = (prod: Produto) => {
