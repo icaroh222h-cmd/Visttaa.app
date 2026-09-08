@@ -5,12 +5,14 @@ import { auth, db } from '../config/firebase';
 import { captureFirebaseError, trackEvent } from '../services/telemetry';
 import { Mail, Lock, EyeOff, Eye, Store, Package, BarChart3, ShieldCheck, Instagram, Linkedin, ArrowUpRight, CheckCircle2 } from 'lucide-react';
 import { CreatorLogo, FeedbackAlert, LogoVistta, ModalBase } from '../components/SharedUI';
+import { isValidEmail, sanitizeEmailInput } from '../utils/documentMask';
 
 export function AuthScreen() {
   const [authMode, setAuthMode] = useState<'login' | 'register' | 'recover' | 'reset'>('login');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
+  const [isDark, setIsDark] = useState(false);
   const [authConfirmPassword, setAuthConfirmPassword] = useState('');
   const [authError, setAuthError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -19,6 +21,11 @@ export function AuthScreen() {
   const [resetFeedback, setResetFeedback] = useState('');
   const [accountExists, setAccountExists] = useState(false);
   const [resetCode, setResetCode] = useState('');
+
+  useEffect(() => {
+    const dark = document.documentElement.classList.contains('dark');
+    setIsDark(dark);
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -45,25 +52,29 @@ export function AuthScreen() {
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    const normalizedEmail = sanitizeEmailInput(authEmail);
     setAuthError('');
     setResetFeedback('');
     setAccountExists(false);
+    if (!isValidEmail(normalizedEmail)) {
+      setAuthError('Informe um e-mail válido com letras, números e os caracteres permitidos.');
+      return;
+    }
     setIsLoggingIn(true);
     try {
       if (authMode === 'login') {
-        await signInWithEmailAndPassword(auth, authEmail.trim(), authPassword);
+        await signInWithEmailAndPassword(auth, normalizedEmail, authPassword);
         void trackEvent('login', { method: 'password' });
       } else if (authMode === 'register') {
-        if (!authEmail.trim()) throw new Error('Informe seu e-mail.');
         if (authPassword.length < 6) throw new Error('A senha deve ter pelo menos 6 caracteres.');
         if (authPassword !== authConfirmPassword) throw new Error('As senhas não coincidem.');
         if (!acceptedTerms) throw new Error('Aceite os Termos de Uso e a Política de Privacidade para continuar.');
-        const userCred = await createUserWithEmailAndPassword(auth, authEmail.trim(), authPassword);
+        const userCred = await createUserWithEmailAndPassword(auth, normalizedEmail, authPassword);
         try {
           await update(ref(db, `users/${userCred.user.uid}`), {
             role: 'admin',
             status: 'active',
-            email: authEmail.trim().toLowerCase(),
+            email: normalizedEmail,
             nome: ''
           });
         } catch (dbErr: any) {
@@ -118,8 +129,8 @@ export function AuthScreen() {
   };
 
   const handlePasswordReset = async () => {
-    const email = authEmail.trim();
-    if (!email) {
+    const email = sanitizeEmailInput(authEmail);
+    if (!isValidEmail(email)) {
       setAuthError('Informe um e-mail válido para receber o link de recuperação.');
       return;
     }
@@ -198,10 +209,16 @@ export function AuthScreen() {
     return 'Não foi possível entrar com Google. Tente novamente.';
   }
 
+  const inputClass = isDark
+    ? 'w-full bg-white/[0.06] border border-white/10 text-white placeholder:text-white/35 rounded-xl pl-12 pr-4 py-3.5 outline-none focus:border-[#9c4cff]'
+    : 'w-full bg-white border border-slate-200 text-slate-900 placeholder:text-slate-400 rounded-xl pl-12 pr-4 py-3.5 outline-none focus:border-[#9c4cff]';
+  const mutedTextClass = isDark ? 'text-white/60' : 'text-slate-600';
+  const labelClass = isDark ? 'text-white/55' : 'text-slate-600';
+
   return (
-    <div className="flex min-h-[100dvh] w-full bg-[#fbfaf8] dark:bg-[#171124] text-slate-900 dark:text-white font-sans overflow-hidden">
+    <div className={`flex min-h-[100dvh] w-full ${isDark ? 'bg-[#171124] text-white' : 'bg-[#f5f6f4] text-slate-900'} font-sans overflow-hidden`}>
       {/* Painel Esquerdo (VISTTA) */}
-      <div className="hidden lg:flex w-[55%] min-w-0 flex-col items-center justify-start bg-[#110d2b] p-8 pt-12 xl:p-12 xl:pt-20 text-white relative overflow-y-auto custom-scrollbar">
+      <div className={`hidden lg:flex w-[55%] min-w-0 flex-col items-center justify-start ${isDark ? 'bg-[#110d2b] text-white' : 'bg-[#efeafc] text-slate-900'} p-8 pt-12 xl:p-12 xl:pt-20 relative overflow-y-auto custom-scrollbar`}>
         <div className="absolute inset-0 opacity-35" style={{ backgroundImage: 'radial-gradient(circle at 20% 15%, rgba(109,74,255,.34), transparent 34%), radial-gradient(circle at 80% 80%, rgba(61,29,132,.3), transparent 38%), linear-gradient(rgba(255,255,255,.045) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px)', backgroundSize: '100% 100%, 100% 100%, 40px 40px, 40px 40px' }} />
         <div className="absolute -right-20 top-1/4 h-80 w-80 rounded-full border border-white/10"></div>
         <div className="absolute right-8 top-1/3 h-48 w-48 rounded-full border border-[#9c4cff]/25"></div>
@@ -209,7 +226,7 @@ export function AuthScreen() {
         <div className="relative z-10 flex w-full max-w-2xl flex-col">
           <div className="mb-12 flex items-center gap-4">
             <span className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-[#080a12] p-1.5"><LogoVistta className="h-full w-full" solidWhite={false} /></span>
-            <div><h1 className="font-display text-[34px] font-bold tracking-[.2em] leading-none text-white xl:text-[40px]">VISTTA</h1><p className="mt-3 text-[9px] font-semibold uppercase tracking-[.28em] text-[#b99cff] xl:text-[10px] xl:tracking-[.32em]">Gestão inteligente para óticas</p></div>
+            <div><h1 className={`font-display text-[34px] font-bold tracking-[.2em] leading-none ${isDark ? 'text-white' : 'text-slate-900'} xl:text-[40px]`}>VISTTA</h1><p className="mt-3 text-[9px] font-semibold uppercase tracking-[.28em] text-[#b99cff] xl:text-[10px] xl:tracking-[.32em]">Gestão inteligente para óticas</p></div>
           </div>
 
           <div className="mb-10 max-w-xl">
@@ -251,39 +268,40 @@ export function AuthScreen() {
       </div>
 
       {/* Formulário Direito */}
-      <div className="flex-1 lg:w-[45%] min-w-0 min-h-[100dvh] bg-[#0f0b24] dark:bg-[#0f0b24] flex flex-col items-center justify-start lg:justify-center px-4 pb-6 pt-8 sm:p-6 lg:p-8 relative overflow-y-auto custom-scrollbar">
+      <div className={`flex-1 lg:w-[45%] min-w-0 min-h-[100dvh] ${isDark ? 'bg-[#0f0b24]' : 'bg-[#f3f2f8]'} flex flex-col items-center justify-start lg:justify-center px-4 pb-6 pt-8 sm:p-6 lg:p-8 relative overflow-y-auto custom-scrollbar`}>
         <div className="w-full max-w-[520px]">
           <div className="mb-7 flex flex-col items-center gap-3 text-center lg:hidden">
             <span className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-[#080a12] p-1.5 shadow-[0_10px_30px_rgba(109,74,255,.2)]"><LogoVistta className="h-full w-full" solidWhite={false} /></span>
             <div><div className="font-display text-xl font-bold tracking-[.2em] text-white">VISTTA</div><div className="mt-1 text-[8px] font-semibold uppercase tracking-[.2em] text-[#b879ff]">Gestão inteligente para óticas</div></div>
           </div>
-          <div className="bg-white/[0.055] dark:bg-white/[0.055] rounded-[20px] sm:rounded-[28px] shadow-[0_24px_70px_rgba(0,0,0,.3)] border border-[#8d63ff]/30 p-5 sm:p-7 lg:p-8 mb-5 w-full backdrop-blur-md">
+          <div className={`${isDark ? 'bg-white/[0.055] border-[#8d63ff]/30 shadow-[0_24px_70px_rgba(0,0,0,.3)]' : 'bg-white border border-slate-200 shadow-[0_20px_45px_rgba(15,11,36,.08)]'} rounded-[20px] sm:rounded-[28px] p-5 sm:p-7 lg:p-8 mb-5 w-full backdrop-blur-md`}>
              <div className="text-center mb-6 sm:mb-8">
-               <div className="inline-flex items-center gap-2 text-[#b879ff] text-[10px] font-bold uppercase tracking-[.18em] mb-4"><Lock size={13} /> Acesso seguro</div><h2 className="font-display text-2xl sm:text-[28px] font-bold mb-2 text-white">{authMode === 'login' ? 'Bem-vindo de volta!' : authMode === 'register' ? 'Crie sua conta' : authMode === 'recover' ? 'Recuperar senha' : 'Definir nova senha'}</h2>
-               {authMode === 'login' && <p className="text-[14px] text-white/60">Acesse sua conta para continuar.</p>}
-               {authMode === 'register' && <p className="text-[14px] text-white/60">Comece a gerenciar sua ótica de forma inteligente.</p>}
-               {authMode === 'recover' && <p className="text-[14px] text-white/60">Digite seu e-mail para receber o link de recuperação.</p>}
-               {authMode === 'reset' && <p className="text-[14px] text-white/60">Escolha uma nova senha para voltar a acessar sua conta.</p>}
+               <div className="inline-flex items-center gap-2 text-[#b879ff] text-[10px] font-bold uppercase tracking-[.18em] mb-4"><Lock size={13} /> Acesso seguro</div>
+               <h2 className={`font-display text-2xl sm:text-[28px] font-bold mb-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>{authMode === 'login' ? 'Bem-vindo de volta!' : authMode === 'register' ? 'Crie sua conta' : authMode === 'recover' ? 'Recuperar senha' : 'Definir nova senha'}</h2>
+               {authMode === 'login' && <p className={`text-[14px] ${mutedTextClass}`}>Acesse sua conta para continuar.</p>}
+               {authMode === 'register' && <p className={`text-[14px] ${mutedTextClass}`}>Comece a gerenciar sua ótica de forma inteligente.</p>}
+               {authMode === 'recover' && <p className={`text-[14px] ${mutedTextClass}`}>Digite seu e-mail para receber o link de recuperação.</p>}
+               {authMode === 'reset' && <p className={`text-[14px] ${mutedTextClass}`}>Escolha uma nova senha para voltar a acessar sua conta.</p>}
              </div>
-             
+
              <form onSubmit={authMode === 'recover' ? (event) => { event.preventDefault(); void handlePasswordReset(); } : authMode === 'reset' ? handlePasswordChange : handleAuth} className="space-y-4">
                {authError && <FeedbackAlert>{authError}</FeedbackAlert>}
                {resetFeedback && <FeedbackAlert type="success">{resetFeedback}</FeedbackAlert>}
                {accountExists && <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs font-bold text-[#6d4aff]"><button type="button" onClick={() => openMode('login')} className="hover:underline">Entrar</button><button type="button" onClick={() => openMode('recover')} className="hover:underline">Esqueci minha senha</button></div>}
                
                <div>
-                 <label className="block text-[11px] font-bold text-white/55 uppercase tracking-wider mb-2">E-mail</label>
+                 <label className={`block text-[11px] font-bold ${labelClass} uppercase tracking-wider mb-2`}>E-mail</label>
                  <div className="relative">
                    <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                   <input type="email" required readOnly={authMode === 'reset'} autoComplete="email" value={authEmail} onChange={e => { setAuthEmail(e.target.value); setAuthError(''); setResetFeedback(''); }} className="w-full bg-white/[0.06] border border-white/10 text-white placeholder:text-white/35 rounded-xl pl-12 pr-4 py-3.5 outline-none focus:border-[#9c4cff] read-only:opacity-70" placeholder="Seu e-mail" aria-invalid={Boolean(authError)} />
+                   <input type="email" required readOnly={authMode === 'reset'} autoComplete="email" value={authEmail} onChange={e => { setAuthEmail(sanitizeEmailInput(e.target.value)); setAuthError(''); setResetFeedback(''); }} className={`${inputClass} ${authMode === 'reset' ? 'read-only:opacity-70' : ''}`} placeholder="Seu e-mail" aria-invalid={Boolean(authError)} />
                  </div>
                </div>
 
                {authMode !== 'recover' && <div>
-                 <label className="block text-[11px] font-bold text-white/55 uppercase tracking-wider mb-2">Senha</label>
+                 <label className={`block text-[11px] font-bold ${labelClass} uppercase tracking-wider mb-2`}>Senha</label>
                  <div className="relative">
                    <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                   <input type={showPassword ? "text" : "password"} required autoComplete={authMode === 'login' ? 'current-password' : 'new-password'} value={authPassword} onChange={e => setAuthPassword(e.target.value)} className="w-full bg-white/[0.06] border border-white/10 text-white placeholder:text-white/35 rounded-xl pl-12 pr-12 py-3.5 outline-none focus:border-[#9c4cff]" placeholder="Sua senha" />
+                   <input type={showPassword ? "text" : "password"} required autoComplete={authMode === 'login' ? 'current-password' : 'new-password'} value={authPassword} onChange={e => setAuthPassword(e.target.value)} className={`${inputClass} pr-12`} placeholder="Sua senha" />
                    <button type="button" aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'} onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400">
                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                    </button>
@@ -291,10 +309,10 @@ export function AuthScreen() {
                    {authMode === 'login' && <button type="button" onClick={() => openMode('recover')} className="mt-2 text-xs font-semibold text-[#b879ff] hover:underline">Esqueci minha senha</button>}
                </div>}
                {(authMode === 'register' || authMode === 'reset') && <div>
-                 <label className="block text-[11px] font-bold text-white/55 uppercase tracking-wider mb-2">Confirmar senha</label>
+                 <label className={`block text-[11px] font-bold ${labelClass} uppercase tracking-wider mb-2`}>Confirmar senha</label>
                  <div className="relative">
                    <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                   <input type={showPassword ? 'text' : 'password'} required autoComplete="new-password" value={authConfirmPassword} onChange={e => setAuthConfirmPassword(e.target.value)} className="w-full bg-white/[0.06] border border-white/10 text-white placeholder:text-white/35 rounded-xl pl-12 pr-4 py-3.5 outline-none focus:border-[#9c4cff]" placeholder="Confirme sua senha" />
+                   <input type={showPassword ? 'text' : 'password'} required autoComplete="new-password" value={authConfirmPassword} onChange={e => setAuthConfirmPassword(e.target.value)} className={inputClass} placeholder="Confirme sua senha" />
                  </div>
                </div>}
 

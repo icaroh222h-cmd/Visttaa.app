@@ -2,6 +2,17 @@ export function sanitizeDigits(value: string): string {
   return (value || '').replace(/\D/g, '');
 }
 
+export function sanitizeEmailInput(value: string): string {
+  return (value || '').trim().replace(/\s+/g, '').toLowerCase();
+}
+
+export function isValidEmail(value: string): boolean {
+  const email = sanitizeEmailInput(value);
+  if (!email) return false;
+  const pattern = /^[a-z0-9._%+\-]+@[a-z0-9.-]+\.[a-z]{2,}$/i;
+  return pattern.test(email) && !email.includes('..') && !email.startsWith('.') && !email.endsWith('.');
+}
+
 export function formatCPF(value: string): string {
   const digits = sanitizeDigits(value).slice(0, 11);
   if (digits.length <= 3) return digits;

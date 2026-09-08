@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Glasses, MapPin } from 'lucide-react';
 import { Cliente, MedidaOtica, Prescricao } from '../../types';
-import { formatCEP, formatCPF, formatPhone } from '../../utils/documentMask';
+import { formatCEP, formatCPF, formatPhone, sanitizeEmailInput } from '../../utils/documentMask';
 
 interface FormClienteProps {
   data: Cliente | null;
@@ -55,7 +55,7 @@ export function FormCliente({ data, onSave, onClose, onDirtyChange }: FormClient
             <div><label className={labelClass}>WhatsApp</label><input required value={form.tel} onChange={e=>handleDocumentValue('tel', e.target.value)} className={inputClass} placeholder="(00) 00000-0000" /></div>
             <div><label className={labelClass}>CPF / CNPJ</label><input value={form.cpf} onChange={e=>handleDocumentValue('cpf', e.target.value)} className={inputClass} /></div>
             <div><label className={labelClass}>Nascimento</label><input type="date" value={form.nasc} onChange={e=>handleChange('nasc', e.target.value)} className={inputClass} /></div>
-            <div className="md:col-span-2"><label className={labelClass}>E-mail</label><input type="email" value={form.email} onChange={e=>handleChange('email', e.target.value)} className={inputClass} /></div>
+            <div className="md:col-span-2"><label className={labelClass}>E-mail</label><input type="email" value={form.email} onChange={e=>handleChange('email', sanitizeEmailInput(e.target.value))} className={inputClass} /></div>
           </div>
         </div>
 

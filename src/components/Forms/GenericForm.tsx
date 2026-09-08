@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { formatDocument } from '../../utils/documentMask';
+import { formatDocument, sanitizeEmailInput } from '../../utils/documentMask';
 
 export function GenericForm({ config, initialData, onSave, onClose, onDirtyChange }: any) {
   const [form, setForm] = useState(initialData || config.defaultData);
@@ -7,7 +7,8 @@ export function GenericForm({ config, initialData, onSave, onClose, onDirtyChang
   const [saving, setSaving] = useState(false);
 
   const handleChange = (field: any, value: any) => {
-    const nextValue = field.mask ? formatDocument(String(value ?? ''), field.mask) : String(value ?? '');
+    const rawValue = String(value ?? '');
+    const nextValue = field.type === 'email' ? sanitizeEmailInput(rawValue) : field.mask ? formatDocument(rawValue, field.mask) : rawValue;
     setForm((prev: any) => ({ ...prev, [field.name]: nextValue }));
   };
 
